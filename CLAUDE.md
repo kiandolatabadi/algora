@@ -101,6 +101,13 @@ reply so they know what to look at.
 
 ## Change log (newest first)
 
+- **v1.4.1** — brush sizing shifted smaller with finer steps. The old mapping was linear
+  (`br = slider × 2`, 20 steps, 2–40 tex px), so everything usable sat in the bottom
+  quarter of the slider. Now 30 steps over 1–13 tex px on a power curve (`BR_CURVE = 1.5`)
+  that gives the fine end most of the travel; default slider 12 ≈ 3.8 px. `BR_SCALE` is
+  gone — `nominalBr()` is the single source of truth, and `brushRadiusAt` scales it.
+  Also documented the male-model UV bug in `NEXT_STEPS.md` (asset problem, see there).
+  _Revert target: `v1.4`._
 - **v1.4** — undo/redo + brush size normalisation. (1) **Undo/redo** (`NEXT_STEPS.md` #4):
   lazy per-mesh snapshots of the committed base canvas taken at first touch during a
   stroke, one step per stroke, cap 15; `paintLog` (per-dab) truncated/restored alongside.

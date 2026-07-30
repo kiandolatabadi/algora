@@ -167,6 +167,47 @@ and `rebuildDisplay()` compositing the live stroke.
 
 ## Known bugs (fix when convenient)
 
+### 🔴 Male model: paint stops at polygon edges (ASSET bug — not fixable in code)
+
+**Status:** open, **blocked on replacing `male_body.glb`**. User-reported v1.4, with a
+screenshot showing paint filling whole quads with hard edges plus stray painted polygons
+away from the stroke.
+
+**Cause — the male model's UV unwrap is shattered.** Measured directly from the GLB:
+
+| model | tris | UV islands | tris/island | verdict |
+|---|---|---|---|---|
+| `male_body.glb` | 20,764 | **10,387** | **2.00** | every quad is its own island |
+| female `head` | 4,462 | 5 | 892 | fine |
+| female `body` | 1,424 | 2 | 712 | fine |
+| female `hands` | 5,826 | 6 | 971 | fine |
+| female `legs` | 3,968 | 7 | 567 | fine |
+
+The male body is one continuous surface in 3D but **10,387 disconnected islands in UV
+space** — a per-quad atlas. Quads that touch on the body are unrelated in the texture, so:
+(a) paint cannot flow across a polygon edge → hard barriers, and (b) a dab spills into
+whatever unrelated quads sit next to it *in the atlas* → stray painted polygons elsewhere.
+
+It is also far below usable resolution: the median island is **7.1 texels across** at
+`TEX_SIZE = 512` (p10 1.8, p90 34.9). Even a 1-texel-radius brush is comparable to a whole
+island, which is why each polygon fills flat. **No brush size or blending change can fix
+this** — the information simply isn't in the UV layout.
+
+**Fix — replace the asset.** Either re-unwrap `male_body.glb` in Blender (one contiguous
+unwrap with few seams) and re-export, or swap the model entirely. This converges with the
+segmented-model plan in item #1: source one model that is **both** properly unwrapped
+**and** segmented into named parts, and this bug plus the region-map blocker both disappear.
+Raising `TEX_SIZE` would not help. Verify a candidate before adopting it: tris/island should
+be in the hundreds, not ~2.
+
+**Only in-code alternative** (not recommended): paint in 3D space instead of UV space —
+per dab, find all triangles within radius R of `hit.point` and rasterise each one's UV
+footprint with distance falloff. Correct and model-agnostic, but a rewrite of the painting
+pipeline and it still can't beat the ~7-texel island resolution.
+
+**Meanwhile:** the female model is correctly unwrapped and does **not** show this artifact —
+worth defaulting to it, or at least using it for any demo or screen recording.
+
 ### Brush paints different real-world sizes on different body parts
 
 **Status:** ✅ **fixed in v1.4** — see the corrected analysis below.

@@ -1177,8 +1177,8 @@
 
       <div class="ctrl-grp">
         <span class="ctrl-lbl" data-i18n="brush">Brush</span>
-        <input type="range" class="pslider" id="brush-sz" min="1" max="20" value="5">
-        <span class="ctrl-val" id="brush-val">5</span>
+        <input type="range" class="pslider" id="brush-sz" min="1" max="30" value="12">
+        <span class="ctrl-val" id="brush-val">12</span>
       </div>
 
       <div class="ctrl-grp">
@@ -1238,7 +1238,7 @@
 <div id="hover-tip"></div>
 <div id="cursor-ring"></div>
 <div id="el"></div>
-<div id="app-version">© 2026 Kian Dolatabadi · v1.4</div>
+<div id="app-version">© 2026 Kian Dolatabadi · v1.4.1</div>
 
 <!-- ================================================================
      ANIMATIONS + CARDS
@@ -2464,17 +2464,26 @@ initLanguage();
 let activePain  = null;
 let activeDepth = 'skin';
 let isPainting  = false;
-let brushSize   = 5;
+let brushSize   = 12;       /* slider position, BRUSH_STEPS steps — see nominalBr */
 let intensity   = 5;
 let strokeDepth = 'skin';   /* depth mode captured at stroke start */
-let strokeBr    = 20;       /* brush radius (tex px) for current stroke */
+let strokeBr    = 4;        /* brush radius (tex px) for current stroke */
 let strokeBrSet = false;    /* strokeBr is locked on the stroke's FIRST dab    */
 
-/* Brush radius in texture pixels — depth does NOT change size */
-const BR_SCALE = TEX_SIZE / 256;   /* 512/256=2: halves the painted radius at every slider position (was /128) */
+/* Brush radius in texture pixels — depth does NOT change size.
+   The old mapping was linear, br = slider × 2 over 20 steps (2–40 px), which put
+   everything usable in the bottom quarter of the slider and left the top three
+   quarters as unusable blobs. Now: 30 steps over a much smaller range, on a
+   power curve so the fine end gets most of the travel. */
+const BRUSH_STEPS = 30;
+const BR_MIN = 1.0, BR_MAX = 13;   /* texture-pixel radius at slider 1 and 30 */
+const BR_CURVE = 1.5;              /* >1 ⇒ finer increments at the small end  */
 
 /* Nominal radius (tex px) before per-hit UV-density correction. */
-function nominalBr(){ return Math.min(brushSize * BR_SCALE, TEX_SIZE * 0.28); }
+function nominalBr(){
+  const t = (brushSize - 1) / (BRUSH_STEPS - 1);          /* 0..1 */
+  return Math.min(BR_MIN + (BR_MAX - BR_MIN) * Math.pow(t, BR_CURVE), TEX_SIZE * 0.28);
+}
 
 /* Radius in texture pixels for THIS hit: the slider radius scaled by how
    densely the triangle under the cursor happens to be unwrapped, so the painted
@@ -2488,7 +2497,7 @@ function brushRadiusAt(mesh, hit){
     const d = triDensity(g.attributes.position, g.attributes.uv, f.a, f.b, f.c);
     if(d > 0) ratio = Math.min(DENS_MAX, Math.max(DENS_MIN, d / part.refDensity));
   }
-  return Math.min(brushSize * BR_SCALE * ratio, TEX_SIZE * 0.28);
+  return Math.min(nominalBr() * ratio, TEX_SIZE * 0.28);
 }
 
 const paintLog = [];
