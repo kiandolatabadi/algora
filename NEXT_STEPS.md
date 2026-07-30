@@ -50,9 +50,17 @@ copy-pasteable text version makes that portable into any EHR/notes field.
   `"{Type}, {intensityWord} ({min}–{max}/10), {depthWord}."` Join into a short
   paragraph or bullet list. Reuse existing `depthLabel()` and the intensity wording;
   fully localised via `window.I18N`.
-- **v2 (with body region):** add a static `partName → human region` map (e.g.
-  `arm_L → "left arm"`), optionally refined by UV quadrant (upper/lower, medial/lateral)
-  so output reads `"...on the right lower back."` Group the summary by region × type.
+- **v2 (with body region):** ⚠️ **the `partName → human region` map described here is not
+  achievable with the current models.** `male_body.glb` is a **single mesh**, so every male
+  stroke carries the same `partName`; the female model has four (head / body / hands /
+  legs). There is no `arm_L`. Three options, in preference order:
+  1. **Swap in a properly segmented anatomical model** — makes regions fall out for free
+     and unlocks per-part logic generally. Preferred, and worth doing deliberately.
+  2. Record the raycast's 3D hit point per stroke (`paintAt` already has `hit.point` and
+     discards it), then classify by height / left-right / front-back against the model's
+     bounding box. Model-agnostic, but a stroke-schema change, needs threshold calibration
+     against the actual pose, and gives no regions for already-saved sessions.
+  3. Reverse UV → 3D lookup for existing sessions. Most work, lowest value.
 - Surface via a **"Copy summary"** button (near export / session UI) using
   `navigator.clipboard.writeText()`; show a brief "copied" confirmation.
 
@@ -123,7 +131,15 @@ adds real clinical value across many sessions.
 
 ## 4. Undo / redo for painting  — PRIORITY 4 (quick win, slot in anytime)
 
-**Status:** not started
+**Status:** ✅ **done in v1.4.** Implemented as lazy per-mesh snapshots of the committed
+base canvas, taken the first time a stroke touches a part (`snapshotForUndo`), committed
+as one step on `pointerup`/`pointerleave` (`endUndoStroke`), capped at `UNDO_LIMIT = 15`.
+`paintLog` is per-dab, so each step also stores the log length at stroke start and undo
+splices back to it (the removed tail is kept on the redo entry). Eraser drags are covered
+for free, since the eraser writes straight into the base canvas and the snapshot precedes
+it. Stacks reset via `resetUndo()` on Clear, `switchGender`, and `restoreSession` (which
+also covers entering view and compare mode). Buttons `#undo-btn`/`#redo-btn` plus
+`Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`, `Ctrl+Y`, ignored while focus is in a text field.
 
 **Goal.** Undo/redo for paint strokes on the body map.
 
@@ -153,23 +169,41 @@ and `rebuildDisplay()` compositing the live stroke.
 
 ### Brush paints different real-world sizes on different body parts
 
-**Status:** open (user-reported, low priority). **Symptom:** with the same brush
-setting, the painted blob covers a larger/smaller area of the body depending on which
-mesh/polygon you paint on.
+**Status:** ✅ **fixed in v1.4** — see the corrected analysis below.
 
-**Cause.** The brush radius `br` is in **texture pixels** (constant), but each mesh is
-UV-unwrapped at a **different texel-to-world density**, so a fixed texel radius maps to
-different physical sizes per part.
+**Symptom.** With the same brush setting, the painted blob covers a larger/smaller area
+of the body depending on where you paint.
 
-**Exact fix.** Normalise the brush by per-part UV density:
-- In `setupModel`, for each mesh compute a density factor from the geometry — e.g.
-  `sqrt(sum(worldTriArea) / sum(uvTriArea))` over its triangles (positions + uv
-  attributes) — and store it on `userData` (e.g. `uvDensity`). Normalise so the mean
-  part = 1 (or pick a reference part).
-- In `paintAt`, scale the radius: `br = baseBr * part.uvDensity` (still clamped). Keep
-  `strokeBr`/`brushUV` in sync so pattern scale and the saved stroke log match.
-- Note: this corrects **between-part** differences; within-part UV stretch remains, but
-  that's the dominant visible issue. Verify in-browser (can't be tested headlessly).
+**Cause.** The brush radius `br` is in **texture pixels** (constant), but the body is
+UV-unwrapped at a **varying texel-to-world density**, so a fixed texel radius maps to
+different physical sizes.
+
+> **Correction — the fix originally written here was wrong.** It prescribed a *per-mesh*
+> `uvDensity` factor. That cannot work: `male_body.glb` is a **single mesh**
+> (`Low_Poly_Male_body:Group2_lambert1_0`) and `activeGender` defaults to `'male'`, so a
+> per-mesh factor is one uniform scale over the whole body and changes nothing. All of the
+> reported variation is *within* a mesh — which the per-mesh approach explicitly does not
+> address. The female model has only four paintable meshes (head / body / hands / legs),
+> so it fares little better.
+
+**Actual fix (v1.4).** Measure density **per hit**, not per mesh:
+- `triDensity(pos, uv, a, b, c)` returns `sqrt(uvArea / posArea)` for one triangle —
+  UV units per object-space unit. Object space is fine because `model.scale` is a single
+  uniform scalar and cancels in the ratio below.
+- `setupModel` walks every triangle of every paintable mesh (`collectDensities`) and stores
+  the **model-wide median** as `refDensity` on each `userData`, so the brush is calibrated
+  across parts rather than per part.
+- `brushRadiusAt(mesh, hit)` recomputes the density of the triangle under `hit.face` and
+  returns `brushSize * BR_SCALE * clamp(d / refDensity, 0.3, 3)`. Using the median as the
+  reference preserves the existing slider feel at typical density.
+- `strokeBr` is locked on the stroke's **first** dab (`strokeBrSet`), since `br` now varies
+  per dab but the depth hatch is applied once over the whole stroke.
+- Consequence: the brush's *object-space* radius is now constant (the `d` cancels), which
+  let `updateRing` become a true projected world radius — so the cursor ring finally tracks
+  zoom, which it never did before.
+
+**Residual.** Extreme UV stretch inside a single triangle is still not corrected, and the
+`[0.3, 3]` clamp means pathological triangles are approximated rather than matched.
 
 ## Also-noted (not in the committed four, but worth doing)
 

@@ -81,6 +81,19 @@ reply so they know what to look at.
 
 ## Change log (newest first)
 
+- **v1.4** — undo/redo + brush size normalisation. (1) **Undo/redo** (`NEXT_STEPS.md` #4):
+  lazy per-mesh snapshots of the committed base canvas taken at first touch during a
+  stroke, one step per stroke, cap 15; `paintLog` (per-dab) truncated/restored alongside.
+  Eraser drags included. `#undo-btn`/`#redo-btn` + `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` /
+  `Ctrl+Y`, ignored while a text field has focus. Stacks reset on Clear, `switchGender`,
+  `restoreSession`. (2) **Brush size bug fixed** — but NOT as `NEXT_STEPS.md` prescribed:
+  a per-MESH density factor is a no-op on the male model, which is a single mesh. Density
+  is now measured **per hit** from `hit.face` (`triDensity`) against a model-wide median
+  (`refDensity`), so one slider value = one physical size anywhere. (3) The brush's
+  object-space radius is constant as a result, so `updateRing` now projects a true world
+  radius and the cursor ring tracks zoom (it never did). (4) `pointermove` hoists its
+  raycast — one per move instead of two. (5) Added `data-i18n-title` support to
+  `applyTranslations` for icon-only controls. _Revert target: `v1.3`._
 - **v1.3** — follow-up on the v1.2 fixes. (1) **Cross-stroke paint buildup fixed**:
   strokes now commit via `stampStroke()` — a REPLACE within the covered region (punch to
   skin, then paint at intensity), used for both live preview (`rebuildDisplay`) and commit

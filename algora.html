@@ -329,9 +329,22 @@
       accent-color:var(--map-accent,#666);
     }
 
+    /* Undo / redo — icon-only, pushed right along with Clear */
+    .undo-grp { margin-left:auto; display:flex; gap:0.3rem; flex-shrink:0; }
+    .ubtn {
+      width:2rem; height:2rem; line-height:1;
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.05rem;
+      background:transparent; border:2px solid var(--border);
+      border-radius:50%; color:var(--dim); cursor:pointer;
+      transition:color 0.18s, border-color 0.18s, opacity 0.18s;
+    }
+    .ubtn:hover:not(:disabled) { color:var(--text); border-color:var(--card-border-hover); }
+    .ubtn:disabled { opacity:0.3; cursor:default; }
+
     /* Clear button */
     #clear-btn {
-      margin-left:auto;
+      margin-left:0.4rem;
       padding:0.44rem 1rem; font-size:0.7rem; font-weight:600;
       letter-spacing:0.1em; text-transform:uppercase;
       background:transparent; border:2px solid var(--border);
@@ -924,7 +937,7 @@
         overflow-x:auto; -webkit-overflow-scrolling:touch;
       }
       .bar-sep { display:none; }
-      #depth-bar, .dep, .ctrl-grp, #clear-btn { flex-shrink:0; }
+      #depth-bar, .dep, .ctrl-grp, .undo-grp, #clear-btn { flex-shrink:0; }
       input[type=range].pslider { width:64px; }
       .ctrl-lbl { font-size:0.6rem; }
 
@@ -1181,6 +1194,11 @@
         </button>
       </div>
 
+      <div class="undo-grp">
+        <button type="button" id="undo-btn" class="ubtn" data-i18n-title="undo" aria-label="Undo" disabled>&#x21b6;</button>
+        <button type="button" id="redo-btn" class="ubtn" data-i18n-title="redo" aria-label="Redo" disabled>&#x21b7;</button>
+      </div>
+
       <button id="clear-btn" data-i18n="clear">Clear</button>
     </div>
   </div>
@@ -1220,7 +1238,7 @@
 <div id="hover-tip"></div>
 <div id="cursor-ring"></div>
 <div id="el"></div>
-<div id="app-version">© 2026 Kian Dolatabadi · v1.3</div>
+<div id="app-version">© 2026 Kian Dolatabadi · v1.4</div>
 
 <!-- ================================================================
      ANIMATIONS + CARDS
@@ -1626,6 +1644,7 @@ window.I18N = {
     mapHintDefault: '← Select a pain type on the right<br>then paint it on the body',
     depthSkin: 'Skin', depthSubQ: 'Sub-Q', depthMuscle: 'Muscle', depthVisceral: 'Deep', depthEraser: 'Eraser',
     brush: 'Brush', intensity: 'Intensity', clear: 'Clear',
+    undo: 'Undo', redo: 'Redo',
     intensityMild: 'Mild', intensitySevere: 'Severe',
     genderMale: '♂ Male', genderFemale: '♀ Female',
     patients: 'Patients',
@@ -1665,6 +1684,7 @@ window.I18N = {
     mapHintDefault: '← Sélectionnez un type de douleur à droite<br>puis peignez-le sur le corps',
     depthSkin: 'Peau', depthSubQ: 'Sous-cut.', depthMuscle: 'Muscle', depthVisceral: 'Profond', depthEraser: 'Gomme',
     brush: 'Pinceau', intensity: 'Intensité', clear: 'Effacer',
+    undo: 'Annuler', redo: 'Rétablir',
     intensityMild: 'Légère', intensitySevere: 'Sévère',
     genderMale: '♂ Homme', genderFemale: '♀ Femme',
     patients: 'Patients',
@@ -1709,6 +1729,11 @@ window.applyTranslations = function applyTranslations(){
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
     const val = el.dataset.i18nPlaceholder.split('.').reduce((o,k)=>o?.[k], dict);
     if(val!=null) el.placeholder = val;
+  });
+  /* Icon-only controls carry their label in the tooltip + a11y name */
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{
+    const val = el.dataset.i18nTitle.split('.').reduce((o,k)=>o?.[k], dict);
+    if(val!=null){ el.title = val; el.setAttribute('aria-label', val); }
   });
 
   /* Pain-type card labels — tagged with data-type-id at creation time
@@ -2193,6 +2218,49 @@ const modelData = {
 };
 let activeGender = 'male';
 
+/* ── Brush size normalisation (UV density) ──────────────────────────
+   The brush radius is expressed in TEXTURE pixels, but every patch of body is
+   unwrapped at a different texel-per-unit density — so a fixed texel radius
+   paints a different PHYSICAL size depending on where you touch. We measure the
+   density of the triangle actually hit and scale the radius by it, relative to
+   the model's median, so one slider value means one real size anywhere.
+
+   Note a per-MESH factor cannot fix this: the male body is a SINGLE mesh, so all
+   of its variation is within-mesh. It has to be measured per hit.
+
+   Object space is fine throughout — model.scale is one uniform scalar for the
+   whole model, so it cancels in the local/median ratio. */
+const DENS_MIN = 0.3, DENS_MAX = 3;   /* clamp, so a degenerate tri can't explode the brush */
+
+/* UV units per object-space unit across one triangle; 0 if degenerate. */
+function triDensity(pos, uv, a, b, c){
+  const ax = pos.getX(a), ay = pos.getY(a), az = pos.getZ(a);
+  const e1x = pos.getX(b)-ax, e1y = pos.getY(b)-ay, e1z = pos.getZ(b)-az;
+  const e2x = pos.getX(c)-ax, e2y = pos.getY(c)-ay, e2z = pos.getZ(c)-az;
+  /* |e1 × e2| is twice the area; the factor 2 cancels in the ratio below */
+  const cx = e1y*e2z - e1z*e2y, cy = e1z*e2x - e1x*e2z, cz = e1x*e2y - e1y*e2x;
+  const posArea = Math.hypot(cx, cy, cz);
+  const ux = uv.getX(a), uy = uv.getY(a);
+  const uvArea = Math.abs((uv.getX(b)-ux)*(uv.getY(c)-uy) - (uv.getX(c)-ux)*(uv.getY(b)-uy));
+  if(posArea <= 0 || uvArea <= 0) return 0;
+  return Math.sqrt(uvArea / posArea);
+}
+
+/* Every triangle density in a geometry, appended to `out`. */
+function collectDensities(geom, out){
+  const pos = geom.attributes.position, uv = geom.attributes.uv;
+  if(!pos || !uv) return out;
+  const idx = geom.index, n = idx ? idx.count : pos.count;
+  for(let i = 0; i + 2 < n; i += 3){
+    const a = idx ? idx.getX(i)   : i,
+          b = idx ? idx.getX(i+1) : i+1,
+          c = idx ? idx.getX(i+2) : i+2;
+    const d = triDensity(pos, uv, a, b, c);
+    if(d > 0) out.push(d);
+  }
+  return out;
+}
+
 function setupModel(gltf, gender){
   const model = gltf.scene;
   const entry = modelData[gender];
@@ -2219,6 +2287,16 @@ function setupModel(gltf, gender){
   const center = box2.getCenter(new THREE.Vector3());
   model.position.set(-center.x, -box2.min.y, -center.z);
 
+  /* Reference UV density for the brush — the MEDIAN across every triangle of
+     every paintable mesh, so the brush is calibrated model-wide (hands stay
+     consistent with legs) rather than per-mesh. See triDensity above. */
+  const densities = [];
+  for(const m of meshes) collectDensities(m.geometry, densities);
+  densities.sort((p, q) => p - q);
+  const refDensity = densities.length ? densities[densities.length >> 1] : 0;
+  const modelScale = model.scale.x;        /* uniform; used to size the cursor ring */
+  entry.refDensity = refDensity;
+
   /* Paintable canvas textures (3-layer: base / stroke / display) */
   for(const child of meshes){
     child.geometry.computeVertexNormals();
@@ -2235,7 +2313,7 @@ function setupModel(gltf, gender){
     child.material = new THREE.MeshPhongMaterial({
       map:tex, specular:0x221100, shininess:18, side:THREE.DoubleSide,
     });
-    child.userData = { cv, ctx, cvS, ctxS, cvD, ctxD, tex,
+    child.userData = { cv, ctx, cvS, ctxS, cvD, ctxD, tex, refDensity, modelScale,
                        name: child.name || gender, _strokeActive: false };
     entry.parts.push(child);
   }
@@ -2265,6 +2343,7 @@ function switchGender(gender){
     tex.needsUpdate = true;
   }
   invalidate();          /* gender swap cleared every texture → redraw */
+  resetUndo();           /* the old body's snapshots belong to other meshes */
 }
 
 /* Load both models in parallel */
@@ -2389,9 +2468,28 @@ let brushSize   = 5;
 let intensity   = 5;
 let strokeDepth = 'skin';   /* depth mode captured at stroke start */
 let strokeBr    = 20;       /* brush radius (tex px) for current stroke */
+let strokeBrSet = false;    /* strokeBr is locked on the stroke's FIRST dab    */
 
 /* Brush radius in texture pixels — depth does NOT change size */
 const BR_SCALE = TEX_SIZE / 256;   /* 512/256=2: halves the painted radius at every slider position (was /128) */
+
+/* Nominal radius (tex px) before per-hit UV-density correction. */
+function nominalBr(){ return Math.min(brushSize * BR_SCALE, TEX_SIZE * 0.28); }
+
+/* Radius in texture pixels for THIS hit: the slider radius scaled by how
+   densely the triangle under the cursor happens to be unwrapped, so the painted
+   blob is the same physical size wherever you touch. See triDensity. */
+function brushRadiusAt(mesh, hit){
+  const part = mesh.userData;
+  const f = hit.face;
+  let ratio = 1;
+  if(f && part.refDensity > 0){
+    const g = mesh.geometry;
+    const d = triDensity(g.attributes.position, g.attributes.uv, f.a, f.b, f.c);
+    if(d > 0) ratio = Math.min(DENS_MAX, Math.max(DENS_MIN, d / part.refDensity));
+  }
+  return Math.min(brushSize * BR_SCALE * ratio, TEX_SIZE * 0.28);
+}
 
 const paintLog = [];
 
@@ -2541,13 +2639,95 @@ function bakeStroke(){
   }
 }
 
+/* ── Undo / redo ──────────────────────────────────────────────────────
+   One step = one stroke (pointerdown → pointerup), an eraser drag included.
+   We snapshot a mesh's COMMITTED base canvas the first time a stroke touches it
+   — lazily, so a stroke that stays on one part costs one 512² copy rather than
+   one per part. paintLog holds one entry per DAB, not per stroke, so a step also
+   records the log length at stroke start and undo truncates back to it. */
+const UNDO_LIMIT = 15;                    /* ≈1 MB per snapshot at 512² */
+let undoStack = [], redoStack = [];
+let strokeSnaps = null, strokeLogLen = 0;
+
+function copyCanvas(src){
+  const c = document.createElement('canvas');
+  c.width = c.height = TEX_SIZE;
+  c.getContext('2d').drawImage(src, 0, 0);
+  return c;
+}
+
+/* Fresh snapshots of the given meshes, from their current base. */
+function snapsOf(meshes){ return meshes.map(m => ({ mesh:m, cv:copyCanvas(m.userData.cv) })); }
+
+function restoreSnaps(snaps){
+  for(const {mesh, cv} of snaps){
+    const {ctx, ctxS} = mesh.userData;
+    ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+    ctx.drawImage(cv, 0, 0);
+    ctxS.clearRect(0, 0, TEX_SIZE, TEX_SIZE);   /* drop any uncommitted stroke too */
+    mesh.userData._strokeActive = false;
+    rebuildDisplay(mesh);                       /* → invalidate() */
+  }
+}
+
+function beginUndoStroke(){ strokeSnaps = new Map(); strokeLogLen = paintLog.length; }
+
+function snapshotForUndo(mesh){
+  if(!strokeSnaps || strokeSnaps.has(mesh)) return;
+  strokeSnaps.set(mesh, copyCanvas(mesh.userData.cv));
+}
+
+/* Idempotent: a stroke can end at pointerup OR by leaving the canvas. */
+function endUndoStroke(){
+  if(!strokeSnaps) return;
+  if(strokeSnaps.size){
+    undoStack.push({ snaps:[...strokeSnaps].map(([mesh, cv]) => ({mesh, cv})), logLen:strokeLogLen });
+    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack = [];
+  }
+  strokeSnaps = null;
+  refreshUndoButtons();
+}
+
+function undo(){
+  const step = undoStack.pop();
+  if(!step) return;
+  /* capture the post-stroke state BEFORE restoring, so redo can return to it */
+  redoStack.push({
+    snaps:   snapsOf(step.snaps.map(s => s.mesh)),
+    logLen:  step.logLen,
+    removed: paintLog.splice(step.logLen),
+  });
+  restoreSnaps(step.snaps);
+  refreshUndoButtons();
+}
+
+function redo(){
+  const step = redoStack.pop();
+  if(!step) return;
+  undoStack.push({ snaps:snapsOf(step.snaps.map(s => s.mesh)), logLen:step.logLen });
+  restoreSnaps(step.snaps);
+  paintLog.length = step.logLen;
+  paintLog.push(...step.removed);
+  refreshUndoButtons();
+}
+
+/* Called whenever the canvas content is replaced wholesale — undo must never
+   restore paint belonging to a different body, session or mode. */
+function resetUndo(){
+  undoStack = []; redoStack = []; strokeSnaps = null;
+  refreshUndoButtons();
+}
+
 function paintAt(mesh, hit){
   const uv = hit.uv;
   if(!uv) return;
   const part = mesh.userData;
-  const br   = Math.min(brushSize * BR_SCALE, TEX_SIZE * 0.28);
+  const br   = brushRadiusAt(mesh, hit);
   const cx   = uv.x * TEX_SIZE;
   const cy   = (1 - uv.y) * TEX_SIZE;
+
+  snapshotForUndo(mesh);   /* lazily record this mesh's base BEFORE we touch it */
 
   if(activeDepth === 'eraser'){
     /* Erase from the committed base canvas */
@@ -2571,7 +2751,10 @@ function paintAt(mesh, hit){
 
   if(!activePain) return;
   const [r,g,b] = hexToRgb(activePain.color);
-  strokeBr = br;   /* keep in sync so pattern scales match brush */
+  /* br now varies per dab (UV density), but the depth hatch is applied ONCE over
+     the whole stroke — so lock the pattern scale to the first dab's radius
+     rather than letting it rescale mid-drag. */
+  if(!strokeBrSet){ strokeBr = br; strokeBrSet = true; }
   paintCircle(part.ctxS, cx, cy, br, r, g, b, activeDepth);
   part._strokeActive = true;
   rebuildDisplay(mesh);
@@ -2586,10 +2769,27 @@ function paintAt(mesh, hit){
 }
 
 /* ── Cursor ring ──────────────────────────────────────────────────── */
-function updateRing(screenX, screenY){
-  const br      = Math.min(brushSize * BR_SCALE, TEX_SIZE * 0.28);
-  const rect    = cvEl.getBoundingClientRect();
-  const screenR = (br / TEX_SIZE) * rect.width * 0.55;
+/* Once the brush is UV-normalised its OBJECT-space radius is constant —
+   br = nominal·(d/ref) and radius = (br/TEX_SIZE)/d, so d cancels. That makes
+   the ring exactly a world-space radius projected to screen, which (unlike the
+   old fixed texel approximation) also tracks zoom correctly. */
+function brushWorldRadius(part){
+  if(!part || !(part.refDensity > 0)) return 0;
+  return (nominalBr() / (part.refDensity * TEX_SIZE)) * part.modelScale;
+}
+
+let lastRingR = 12;   /* held while the cursor is off the body, so it can't jump */
+function updateRing(screenX, screenY, hit){
+  const rect = cvEl.getBoundingClientRect();
+  let screenR = lastRingR;
+  if(hit && hit.object){
+    const wr = brushWorldRadius(hit.object.userData);
+    if(wr > 0){
+      const dist  = camera.position.distanceTo(hit.point);
+      const halfH = Math.tan(camera.fov * Math.PI / 360) * dist;   /* world half-height at that depth */
+      if(halfH > 0){ screenR = wr * (rect.height / 2) / halfH; lastRingR = screenR; }
+    }
+  }
   ring.style.width       = screenR*2 + 'px';
   ring.style.height      = screenR*2 + 'px';
   ring.style.borderColor = activePain ? hexToRgba(activePain.color, 0.75) : 'rgba(20,20,40,0.55)';
@@ -2667,6 +2867,10 @@ function showTipAt(x,y){
 cvEl.addEventListener('pointerenter', ()=>{ ring.style.display='block'; });
 cvEl.addEventListener('pointerleave', ()=>{
   ring.style.display='none'; tip.style.display='none';
+  /* The stroke is not baked here (the next pointerdown does that), but it IS
+     over as far as undo is concerned — its snapshot was taken at stroke start,
+     so undoing still discards it correctly whenever the bake lands. */
+  if(isPainting) endUndoStroke();
   isPainting=false; controls.enabled=true;
 });
 
@@ -2680,6 +2884,8 @@ cvEl.addEventListener('pointerdown', e=>{
     bakeStroke();               /* commit previous stroke at current intensity */
     for(const m of bodyParts) m.userData.ctxS.clearRect(0,0,TEX_SIZE,TEX_SIZE);
     strokeDepth = activeDepth;  /* lock depth for this stroke */
+    strokeBrSet = false;        /* first dab will lock the pattern scale       */
+    beginUndoStroke();          /* snapshots are taken lazily inside paintAt   */
     controls.enabled=false; isPainting=true;
     paintAt(hits[0].object, hits[0]);
     tapInfo=null;
@@ -2688,23 +2894,23 @@ cvEl.addEventListener('pointerdown', e=>{
        finger/mouse didn't travel — a drag is an orbit, not a tap). */
     tapInfo = { x:e.clientX, y:e.clientY, moved:false };
   }
-  updateRing(e.clientX, e.clientY);
+  updateRing(e.clientX, e.clientY, hits[0]);
 });
 
 cvEl.addEventListener('pointermove', e=>{
-  updateRing(e.clientX, e.clientY);
+  /* One raycast per move, hoisted: the ring needs the hit to size itself (it is
+     a projected world radius now), and both branches below reuse it. */
+  raycaster.setFromCamera(ndcFromEvent(e), camera);
+  const hits = raycaster.intersectObjects(bodyParts, false);
+  updateRing(e.clientX, e.clientY, hits[0]);
   if(tapInfo && !tapInfo.moved && Math.hypot(e.clientX-tapInfo.x, e.clientY-tapInfo.y) > 11) tapInfo.moved=true;
 
   if(isPainting){
-    raycaster.setFromCamera(ndcFromEvent(e), camera);
-    const hits = raycaster.intersectObjects(bodyParts, false);
     if(hits.length) paintAt(hits[0].object, hits[0]);
     return;
   }
 
   /* Hover tooltip (desktop): report type + intensity under the cursor. */
-  raycaster.setFromCamera(ndcFromEvent(e), camera);
-  const hits = raycaster.intersectObjects(bodyParts, false);
   if(hits.length && hits[0].uv){
     const list = paintInfoAt(hits[0].object.userData.name, hits[0].uv);
     if(list.length){
@@ -2719,7 +2925,7 @@ cvEl.addEventListener('pointermove', e=>{
 });
 
 cvEl.addEventListener('pointerup', ()=>{
-  if(isPainting) bakeStroke();   /* commit stroke at final intensity */
+  if(isPainting){ bakeStroke(); endUndoStroke(); }   /* commit stroke at final intensity */
   isPainting=false; controls.enabled=true;
   if(tapInfo && !tapInfo.moved) showTipAt(tapInfo.x, tapInfo.y);   /* tap = inspect */
   tapInfo=null;
@@ -2889,9 +3095,35 @@ document.getElementById('clear-btn').addEventListener('click',()=>{
   }
   invalidate();          /* cleared the body → redraw the blank textures */
   paintLog.length=0;
+  resetUndo();           /* nothing left to step back through */
   hideSessionLegend();
   hidePinnedTip(); tip.style.display='none';
 });
+
+/* ── Undo / redo controls ───────────────────────────────────── */
+const undoBtn = document.getElementById('undo-btn');
+const redoBtn = document.getElementById('redo-btn');
+
+function refreshUndoButtons(){
+  if(undoBtn) undoBtn.disabled = undoStack.length === 0;
+  if(redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
+undoBtn.addEventListener('click', undo);
+redoBtn.addEventListener('click', redo);
+
+/* Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (and Ctrl+Y). Never steal the keystroke from a
+   text field — the patient-name and session-label inputs need their own undo. */
+document.addEventListener('keydown', e=>{
+  if(!(e.metaKey || e.ctrlKey) || e.altKey) return;
+  const t = e.target;
+  if(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const k = e.key.toLowerCase();
+  if(k === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if(k === 'y'){ e.preventDefault(); redo(); }
+});
+
+refreshUndoButtons();
 
 /* ── Render loop ─────────────────────────────────────────────── */
 let compareActive = false;
@@ -3094,6 +3326,7 @@ function restoreSession(sess){
      tapping the loaded body reports the pain type + intensity at each point. */
   paintLog.length=0;
   if(sess.strokes) paintLog.push(...unpackStrokes(sess.strokes));
+  resetUndo();   /* a loaded session replaces the canvas wholesale */
   for(const mesh of modelData[sess.gender].parts){
     const url=sess.textures[mesh.userData.name]; if(!url) continue;
     loadImage(url).then(img=>{
