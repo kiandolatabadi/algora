@@ -18,6 +18,26 @@ NEXT_STEPS.md, take the highest-priority unstarted item, and implement it. Treat
 items as decided work — not suggestions to re-open. Keep each item's **Status** and
 acceptance checklist up to date as you go.
 
+## WHAT to build is decided. HOW is only a suggestion.
+
+The distinction matters and cuts one way only:
+
+- **The goal / scope of an item is committed** — don't re-litigate whether to build it.
+- **Any implementation recipe written in these docs is a tip, not an obligation.** The
+  "Approach", "Exact fix" and "Where" notes were written from an assumption about the code
+  that may be stale or simply wrong. **Verify the premise against the actual code before
+  following a prescribed fix.** If the code says otherwise, implement the better fix, say
+  plainly what was wrong and why, and correct the doc in the same commit. That is preferred
+  behaviour, not overstepping.
+
+Precedent (v1.4): `NEXT_STEPS.md` prescribed a **per-mesh** UV-density factor for the brush
+bug. `male_body.glb` is a **single mesh**, so that fix would have been a literal no-op on
+the default model. The per-**hit** fix that shipped came from checking the premise first.
+The same false assumption — that the body is segmented into named parts — also invalidated
+the region map in item #1, which went unnoticed until the meshes were actually inspected.
+
+When a fix and its doc disagree, the code wins. Flag it; don't quietly follow the doc.
+
 ## Hard constraints (do not violate)
 
 - **No backend / no external API / no CDN / no runtime network.** Everything client-side.
