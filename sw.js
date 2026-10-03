@@ -3,9 +3,11 @@
  * Copyright © 2026 Kian Dolatabadi. All rights reserved.
  * Proprietary software — evaluation use only. See LICENSE and TERMS.md.
  */
-const CACHE_NAME = 'algora-v1.4.1';
+const CACHE_NAME = 'algora-v1.5.0';
 
 const PRECACHE_URLS = [
+  './',
+  './index.html',
   './algora.html',
   './manifest.json',
   './icons/icon-192.png',
@@ -14,7 +16,6 @@ const PRECACHE_URLS = [
   './vendor/three/build/three.module.js',
   './vendor/three/examples/jsm/controls/OrbitControls.js',
   './vendor/three/examples/jsm/loaders/GLTFLoader.js',
-  './vendor/three/examples/jsm/utils/BufferGeometryUtils.js',
   './male_body.glb',
   './low_poly_female_body__teeth__tongue_lp.glb',
 ];

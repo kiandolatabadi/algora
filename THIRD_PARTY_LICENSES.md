@@ -50,5 +50,7 @@ which requires attribution:
 
 Full licence text: <https://creativecommons.org/licenses/by/4.0/legalcode>
 
-> Note: CC-BY-4.0 is a content licence, not a software licence. The models are
-> distributed under CC-BY-4.0; only the application code is AGPL-3.0.
+> Note: CC-BY-4.0 is a content licence, not a software licence. The models stay
+> under CC-BY-4.0; Algora's own code is under its own licence — see
+> [`LICENSE`](./LICENSE). (This note previously said "AGPL-3.0", which
+> contradicted `LICENSE` and was never correct.)
