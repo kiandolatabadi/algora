@@ -9,7 +9,11 @@
     Bundled Three.js is MIT and the 3D models are CC-BY-4.0; see THIRD_PARTY_LICENSES.md.
   -->
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <!-- maximum-scale/user-scalable=no removed: it blocks pinch-to-zoom for
+       low-vision users (an accessibility regression), and iOS Safari has
+       ignored it since iOS 10 anyway. The canvas suppresses browser zoom
+       itself via touch-action:none, which is targeted rather than global. -->
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
   <title>Algora</title>
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#1a4fa0" id="theme-color-meta">
@@ -26,7 +30,7 @@
       --bg:#f0f0ec;
       --surface:#ffffff;
       --border:#dcdce8;
-      --dim:#8888aa;
+      --dim:#6a6a8c;        /* 4.53:1 on --bg — WCAG AA for small text */
       --text:#1a1a30;
       --subtext:#55558a;
       --map-accent:#666;
@@ -74,6 +78,16 @@
       --card-border-hover:#4a4a68;
     }
 
+    /* Visible keyboard focus everywhere. Only the intensity track used to carry
+       a focus style, so tabbing through the pain cards, depth modes and patient
+       controls gave either a browser default or nothing at all. :focus-visible
+       (not :focus) means pointer users never see it. */
+    :focus-visible {
+      outline:2px solid var(--accent-blue);
+      outline-offset:2px;
+      border-radius:4px;
+    }
+
     html, body { height:100%; overflow:hidden; font-size:16px; }
     body {
       background:var(--bg); color:var(--text);
@@ -104,12 +118,17 @@
        without this, two canvases sharing a flex row each get pushed to
        (at least) their full intrinsic/container width instead of
        actually splitting the space, regardless of flex:1. */
-    #three-canvas { flex:1; display:block; width:100%; min-width:0; min-height:0; outline:none; }
+    /* touch-action:none hands every touch gesture on the body map to the app's
+       own handlers — no browser pan, no double-tap zoom, no pull-to-refresh
+       stealing a paint stroke, and no ~300 ms tap delay. Scoped to the canvas
+       so the rest of the UI keeps normal touch behaviour (the pain-card list
+       still scrolls, panels still zoom). */
+    #three-canvas { flex:1; display:block; width:100%; min-width:0; min-height:0; outline:none; touch-action:none; }
     /* Compare mode: a second, fully independent canvas + WebGL context
        instead of scissor-splitting one canvas. Two separate contexts
        can't have the cross-region rendering bugs that technique hit on
        real iOS/iPadOS — each just renders its own scene normally. */
-    #three-canvas-b { flex:1; display:none; width:100%; min-width:0; min-height:0; outline:none; }
+    #three-canvas-b { flex:1; display:none; width:100%; min-width:0; min-height:0; outline:none; touch-action:none; }
     body.compare-active #map-panel { flex-direction:row; }
     body.compare-active #three-canvas-b { display:block; }
     #map-hint {
@@ -323,7 +342,9 @@
     /* Brush + Intensity sliders */
     .ctrl-grp { display:flex; align-items:center; gap:0.7rem; }
     .ctrl-lbl { font-size:0.68rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--dim); white-space:nowrap; }
-    .ctrl-val { font-size:0.68rem; font-weight:700; color:var(--text); min-width:1.8em; }
+    /* Wide enough for the brush readout's real measurement ("6 mm".."80 mm")
+       so the controls beside it don't shift as the slider moves. */
+    .ctrl-val { font-size:0.68rem; font-weight:700; color:var(--text); min-width:3.6em; font-variant-numeric:tabular-nums; }
     input[type=range].pslider {
       width:100px; height:5px; cursor:pointer;
       accent-color:var(--map-accent,#666);
@@ -624,6 +645,25 @@
                     background:var(--hover); border-radius:9px;
                     border:1px solid var(--divider); }
     #pp-data-note.hidden { display:none; }
+
+    /* Credits disclosure in the settings panel (CC-BY attribution, in-app). */
+    .st-credits-btn {
+      background:none; border:none; cursor:pointer; padding:0;
+      font:inherit; font-size:0.66rem; font-weight:700; letter-spacing:0.1em;
+      text-transform:uppercase; color:var(--dim); text-align:left;
+    }
+    .st-credits-btn:hover { color:var(--text); }
+    .st-credits-btn::after { content:' \25BE'; }
+    .st-credits-btn[aria-expanded="true"]::after { content:' \25B4'; }
+    #credits-note {
+      margin-top:0.5rem; padding:0.5rem 0.6rem;
+      font-size:0.64rem; line-height:1.55; color:var(--subtext);
+      background:var(--hover); border-radius:9px; border:1px solid var(--divider);
+    }
+    #credits-note.hidden { display:none; }
+    #credits-note p + p, #credits-note ul { margin-top:0.35rem; }
+    #credits-note ul { padding-left:1rem; }
+    #credits-note li { margin-bottom:0.15rem; }
     .pp-back { background:none; border:none; cursor:pointer; font-size:0.9rem;
                color:var(--dim); padding:0 0.15rem; line-height:1; border-radius:50%;
                width:20px; height:20px; display:flex; align-items:center; justify-content:center; }
@@ -1044,6 +1084,23 @@
             <button class="st-opt" data-lang-choice="fr">Français</button>
           </div>
         </div>
+
+        <!-- Credits. The two body models are CC-BY-4.0, which requires
+             attribution on the DISTRIBUTED WORK — a markdown file in the
+             source repository is not reachable by someone using the deployed
+             app, so the notice has to live in the app itself. -->
+        <div class="st-section">
+          <button class="st-credits-btn" id="credits-btn" aria-expanded="false" data-i18n="settingsCredits">Credits &amp; licences</button>
+          <div id="credits-note" class="hidden">
+            <p><strong>Algora</strong> © 2026 Kian Dolatabadi.</p>
+            <p data-i18n="creditsModels">3D body models used under CC-BY-4.0:</p>
+            <ul>
+              <li>&ldquo;Male Body&rdquo; — Alexander Antipov (Dessen)</li>
+              <li>&ldquo;Low poly female body | Teeth + tongue lp&rdquo; — mezuna</li>
+            </ul>
+            <p data-i18n="creditsThree">3D rendering by Three.js (MIT).</p>
+          </div>
+        </div>
       </div>
     </div>
     <div id="map-hint">← Select a pain type on the right<br>then paint it on the body</div>
@@ -1238,7 +1295,7 @@
 <div id="hover-tip"></div>
 <div id="cursor-ring"></div>
 <div id="el"></div>
-<div id="app-version">© 2026 Kian Dolatabadi · v1.4.1</div>
+<div id="app-version">© 2026 Kian Dolatabadi · v1.5.0</div>
 
 <!-- ================================================================
      ANIMATIONS + CARDS
@@ -1655,6 +1712,11 @@ window.I18N = {
     selectTwoSessions: 'Select two different sessions.',
     cmpVs: 'vs', cmpExit: 'Exit compare',
     settingsTitle: 'Settings', settingsTheme: 'Theme', settingsLight: 'Light', settingsDark: 'Dark', settingsLanguage: 'Language',
+    settingsCredits: 'Credits & licences',
+    creditsModels: '3D body models used under CC-BY-4.0:',
+    creditsThree: '3D rendering by Three.js (MIT).',
+    /* Provenance canary — never rendered. See the note in applyTranslations. */
+    _origin: 'algora/kian-dolatabadi/2026/язык-боли/7f3c1e',
     settingsPainColor: 'Pain colour', painColorDistinct: 'Distinct', painColorCustom: 'My colour', painColorHint: 'My pain is this colour — every type takes it',
     legendEmpty: 'No pain recorded',
     cardSelect: 'Select', cardActive: '● Active',
@@ -1695,6 +1757,10 @@ window.I18N = {
     selectTwoSessions: 'Sélectionnez deux séances différentes.',
     cmpVs: 'vs', cmpExit: 'Quitter la comparaison',
     settingsTitle: 'Paramètres', settingsTheme: 'Thème', settingsLight: 'Clair', settingsDark: 'Sombre', settingsLanguage: 'Langue',
+    settingsCredits: 'Crédits et licences',
+    creditsModels: 'Modèles 3D du corps utilisés sous licence CC-BY-4.0 :',
+    creditsThree: 'Rendu 3D par Three.js (MIT).',
+    _origin: 'algora/kian-dolatabadi/2026/язык-боли/7f3c1e',
     settingsPainColor: 'Couleur de la douleur', painColorDistinct: 'Distinctes', painColorCustom: 'Ma couleur', painColorHint: 'Ma douleur est de cette couleur — tous les types la prennent',
     legendEmpty: 'Aucune douleur enregistrée',
     cardSelect: 'Sélectionner', cardActive: '● Actif',
@@ -1714,6 +1780,11 @@ window.I18N = {
   },
 };
 
+/* Note on `_origin` in both dictionaries above: a provenance canary. It is
+   never rendered — no element carries data-i18n="_origin" — and exists so that
+   an unattributed copy of this source can be identified by a plain text search
+   for the string. Evidence of origin, not a protection mechanism: client-side
+   code is readable by definition. Leave it in place; do not "clean it up". */
 window.applyTranslations = function applyTranslations(){
   const dict = window.I18N[window.currentLanguage];
   document.documentElement.lang = window.currentLanguage;
@@ -2059,15 +2130,23 @@ const tip     = document.getElementById('hover-tip');
 const ring    = document.getElementById('cursor-ring');
 
 /* ── Renderer ───────────────────────────────────────────────── */
+/* Device pixel ratio is capped lower on touch devices: a 3x phone screen would
+   otherwise render ~2.3x more fragments than a 2x cap already does, for a
+   difference nobody can resolve at arm's length on a soft-shaded body. This is
+   the cheapest single mobile GPU saving available and it is visually free.
+   Desktop keeps the 2x cap (retina laptops genuinely benefit). */
+const COARSE_POINTER = matchMedia('(pointer:coarse)').matches;
+const MAX_DPR = COARSE_POINTER ? 1.5 : 2;
+
 const renderer = new THREE.WebGLRenderer({ canvas:cvEl, antialias:false });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setClearColor(0xededea, 1);
+renderer.setPixelRatio(Math.min(devicePixelRatio, MAX_DPR));
+renderer.setClearColor(0xf0f0ec, 1);   /* === --bg, so no seam at the panel edges */
 
 /* Compare mode's second view: its own renderer on its own canvas, not a
    scissored region of the main one — see buildCompareScene/enterCompareMode. */
 const rendererB = new THREE.WebGLRenderer({ canvas:cvElB, antialias:false });
-rendererB.setPixelRatio(Math.min(devicePixelRatio, 2));
-rendererB.setClearColor(0xededea, 1);
+rendererB.setPixelRatio(Math.min(devicePixelRatio, MAX_DPR));
+rendererB.setClearColor(0xf0f0ec, 1);
 
 /* Reads each canvas's OWN laid-out size (not its parent's) — #map-panel
    is a flex row when compare mode is active, so the two canvases split
@@ -2081,14 +2160,26 @@ rendererB.setClearColor(0xededea, 1);
    never fires again either — a true deadlock). Leaving CSS in sole
    control of the *displayed* size and only using JS to set the
    *drawing-buffer* resolution avoids that fight entirely. */
+/* ── Cached canvas rect ──────────────────────────────────────────────────────
+   ndc() and updateRing() each called getBoundingClientRect() on every pointer
+   event — two forced style/layout flushes per move, 60–120 times a second,
+   mid-paint. The canvas only moves when the layout changes, and nothing in the
+   app scrolls (body is overflow:hidden), so the rect is cached and refreshed
+   from the places that can actually invalidate it. */
+let cvRect = cvEl.getBoundingClientRect();
+function refreshCvRect(){ cvRect = cvEl.getBoundingClientRect(); }
+
 function resize(){
   const w = cvEl.clientWidth, h = cvEl.clientHeight;
   if(w<1||h<1) return;
   renderer.setSize(w, h, false);
   camera.aspect = w/h;
   camera.updateProjectionMatrix();
+  refreshCvRect();
 }
 new ResizeObserver(resize).observe(cvEl);
+window.addEventListener('resize', refreshCvRect);
+window.addEventListener('orientationchange', refreshCvRect);
 
 function resizeB(){
   const w = cvElB.clientWidth, h = cvElB.clientHeight;
@@ -2101,7 +2192,7 @@ new ResizeObserver(resizeB).observe(cvElB);
 
 /* ── Scene ──────────────────────────────────────────────────── */
 const scene = new THREE.Scene();
-scene.fog   = new THREE.FogExp2(0xededea, 0.009);
+scene.fog   = new THREE.FogExp2(0xf0f0ec, 0.009);
 
 const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 120);
 camera.position.set(0, 8, 28);
@@ -2157,7 +2248,7 @@ function dollyAt(ndc, factor){
 }
 
 function ndcFromClientXY(x, y){
-  const rect = cvEl.getBoundingClientRect();
+  const rect = cvRect;
   return new THREE.Vector2(((x-rect.left)/rect.width)*2-1, -((y-rect.top)/rect.height)*2+1);
 }
 
@@ -2167,28 +2258,78 @@ cvEl.addEventListener('wheel', e => {
   dollyAt(ndcFromClientXY(e.clientX, e.clientY), factor);
 }, { passive: false });
 
-/* Pinch-to-zoom: mirrors the wheel handler above. OrbitControls already
-   handles two-finger drag as pan (screenSpacePanning), this only adds
-   the missing distance-change (pinch) component on top of it. */
-let pinchDist = null;
+/* ── Two-finger navigation (touch) ──────────────────────────────────────────
+   On touch, one finger paints (see the gesture arbitration further down), so
+   two fingers are the ONLY way to reorient the body. That gesture is handled
+   here rather than by OrbitControls, because OrbitControls is switched off for
+   the duration of a paint gesture and never sees the pointers it would need to
+   track a two-finger drag. Owning it outright keeps navigation available no
+   matter what state painting is in:
+
+     spread/pinch → dolly toward the midpoint (as before)
+     drag both    → orbit (azimuth/elevation)
+
+   Orbit is applied by moving the camera on a sphere around controls.target and
+   then calling controls.update(), which re-derives its spherical state from the
+   actual camera position each frame — the same approach dollyAt already uses. */
+let pinchDist = null, pinchMid = null;
 function touchDist(t0, t1){ return Math.hypot(t0.clientX-t1.clientX, t0.clientY-t1.clientY); }
+function touchMid(t0, t1){ return { x:(t0.clientX+t1.clientX)/2, y:(t0.clientY+t1.clientY)/2 }; }
+
+const _orbOffset = new THREE.Vector3();
+const _orbSph    = new THREE.Spherical();
+function orbitByPixels(dx, dy){
+  const h = cvEl.clientHeight || 1;
+  _orbOffset.copy(camera.position).sub(controls.target);
+  _orbSph.setFromVector3(_orbOffset);
+  _orbSph.theta -= TAU * (dx / h) * 0.9;
+  _orbSph.phi   -= TAU * (dy / h) * 0.9;
+  /* Keep off the poles, or the camera's up-vector flips and the view snaps. */
+  _orbSph.phi = Math.max(1e-4, Math.min(Math.PI - 1e-4, _orbSph.phi));
+  _orbOffset.setFromSpherical(_orbSph);
+  camera.position.copy(controls.target).add(_orbOffset);
+  camera.lookAt(controls.target);
+  controls.update();
+  invalidate();
+}
+
 cvEl.addEventListener('touchstart', e=>{
-  if(e.touches.length===2) pinchDist = touchDist(e.touches[0], e.touches[1]);
+  if(e.touches.length===2){
+    pinchDist = touchDist(e.touches[0], e.touches[1]);
+    pinchMid  = touchMid(e.touches[0], e.touches[1]);
+    /* Take sole ownership of the gesture. Without this, a two-finger drag that
+       started on empty background (where controls were never disabled, because
+       nothing was armed) would be handled TWICE — OrbitControls panning from
+       its own two-pointer tracking while orbitByPixels below also rotated.
+       Re-enabled by releaseGesture() once every finger is up. */
+    controls.enabled = false;
+  }
 }, { passive:true });
 cvEl.addEventListener('touchmove', e=>{
   if(e.touches.length!==2 || pinchDist==null) return;
   e.preventDefault();
-  const d = touchDist(e.touches[0], e.touches[1]);
+  const d   = touchDist(e.touches[0], e.touches[1]);
+  const mid = touchMid(e.touches[0], e.touches[1]);
+
+  /* Zoom from the change in finger separation. */
   const delta = d - pinchDist;
   if(Math.abs(delta) > 1.5){
-    const mx=(e.touches[0].clientX+e.touches[1].clientX)/2, my=(e.touches[0].clientY+e.touches[1].clientY)/2;
-    dollyAt(ndcFromClientXY(mx,my), delta * 0.006);
+    dollyAt(ndcFromClientXY(mid.x, mid.y), delta * 0.006);
     pinchDist = d;
   }
+
+  /* Orbit from the movement of the midpoint. Deliberately independent of the
+     zoom branch so a gesture that both spreads and sweeps does both. */
+  if(pinchMid){
+    const mdx = mid.x - pinchMid.x, mdy = mid.y - pinchMid.y;
+    if(Math.abs(mdx) > 0.5 || Math.abs(mdy) > 0.5) orbitByPixels(mdx, mdy);
+  }
+  pinchMid = mid;
 }, { passive:false });
 cvEl.addEventListener('touchend', e=>{
-  if(e.touches.length<2) pinchDist = null;
+  if(e.touches.length<2){ pinchDist = null; pinchMid = null; }
 }, { passive:true });
+cvEl.addEventListener('touchcancel', ()=>{ pinchDist = null; pinchMid = null; }, { passive:true });
 
 /* ── Lighting ───────────────────────────────────────────────── */
 scene.add(new THREE.AmbientLight(0xffffff, 0.75));
@@ -2310,6 +2451,15 @@ function setupModel(gltf, gender){
     const { c:cvS, x:ctxS } = makeCanvas(false);  /* current stroke (clear)  */
     const { c:cvD, x:ctxD } = makeCanvas(true);   /* display composite       */
     const tex = new THREE.CanvasTexture(cvD);
+    /* No mipmaps. Every dab flags this texture for re-upload, and with mipmaps
+       on, each upload also regenerates the whole 512² mip chain — pure cost for
+       a texture that is magnified (body filling the screen), not minified, in
+       almost every view. Anisotropy keeps the paint crisp at grazing angles,
+       which is where the mip chain would otherwise have helped.
+       Revert both lines if distant full-body views look too aliased. */
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     child.material = new THREE.MeshPhongMaterial({
       map:tex, specular:0x221100, shininess:18, side:THREE.DoubleSide,
     });
@@ -2393,6 +2543,14 @@ settingsBtn.addEventListener('click', ()=>
 );
 document.getElementById('settings-close').addEventListener('click', closeSettingsPanel);
 
+/* Credits disclosure (in-app CC-BY attribution — see the markup). */
+const creditsBtn = document.getElementById('credits-btn');
+creditsBtn?.addEventListener('click', ()=>{
+  const open = creditsBtn.getAttribute('aria-expanded') === 'true';
+  creditsBtn.setAttribute('aria-expanded', String(!open));
+  document.getElementById('credits-note')?.classList.toggle('hidden', open);
+});
+
 /* Keeps the gear button flush against the gender toggle's left edge in
    every layout (desktop centered pill, phone right-aligned pill) without
    needing separate positioning rules per breakpoint. */
@@ -2421,7 +2579,7 @@ function applyTheme(theme){
   /* The body-map canvas is cleared by the WebGL renderer, not CSS, so the
      backdrop behind the 3D model has to be repainted here too — otherwise
      dark mode leaves a big light-grey rectangle behind everything. */
-  const clear = theme==='dark' ? 0x101018 : 0xededea;
+  const clear = theme==='dark' ? 0x0f0f16 : 0xf0f0ec;   /* === --bg in both themes */
   renderer?.setClearColor(clear, 1);
   rendererB?.setClearColor(clear, 1);
 }
@@ -2470,19 +2628,45 @@ let strokeDepth = 'skin';   /* depth mode captured at stroke start */
 let strokeBr    = 4;        /* brush radius (tex px) for current stroke */
 let strokeBrSet = false;    /* strokeBr is locked on the stroke's FIRST dab    */
 
-/* Brush radius in texture pixels — depth does NOT change size.
-   The old mapping was linear, br = slider × 2 over 20 steps (2–40 px), which put
-   everything usable in the bottom quarter of the slider and left the top three
-   quarters as unusable blobs. Now: 30 steps over a much smaller range, on a
-   power curve so the fine end gets most of the travel. */
-const BRUSH_STEPS = 30;
-const BR_MIN = 1.0, BR_MAX = 13;   /* texture-pixel radius at slider 1 and 30 */
-const BR_CURVE = 1.5;              /* >1 ⇒ finer increments at the small end  */
+/* ── Brush size, in real centimetres of skin ─────────────────────────────────
+   The slider used to be calibrated in TEXTURE PIXELS. Per-hit UV-density
+   correction (brushRadiusAt) then made one slider value mean one physical size
+   anywhere on a GIVEN body — but it could not make it mean the same thing on
+   BOTH bodies, because the conversion from texels to centimetres is a property
+   of the model: radius_world = nominalBr/(refDensity·TEX)·modelScale. Measured,
+   the two assets differ by a factor of 2.8 (male 0.0369 vs female 0.0134 world
+   units per texel), so slider "12" painted a 2.8x larger mark on the male body
+   than on the female one — and the smallest possible male mark was 8 mm across
+   while the female head could do 2 mm.
 
-/* Nominal radius (tex px) before per-hit UV-density correction. */
-function nominalBr(){
+   The slider is therefore now calibrated in centimetres of skin and converted
+   INTO texels per model, which is the same computation run backwards. Both
+   bodies are normalised to 16 world units tall (setupModel), so one world unit
+   is BODY_CM/16 centimetres and the mapping is exact for both.
+
+   Side benefit: the readout is now a real measurement in millimetres, which is
+   both more useful than an arbitrary 1–30 and language-free. */
+const BRUSH_STEPS = 30;
+const BR_CM_MIN = 0.30, BR_CM_MAX = 4.0;  /* brush RADIUS in cm at slider 1 and 30 */
+const BR_CURVE  = 1.5;                    /* >1 ⇒ finer increments at the small end */
+const BODY_CM   = 170;                    /* reference body height for the 16-unit rig */
+const CM_PER_UNIT = BODY_CM / 16;
+
+/* Brush radius in centimetres of skin, from the slider position. */
+function brushRadiusCm(){
   const t = (brushSize - 1) / (BRUSH_STEPS - 1);          /* 0..1 */
-  return Math.min(BR_MIN + (BR_MAX - BR_MIN) * Math.pow(t, BR_CURVE), TEX_SIZE * 0.28);
+  return BR_CM_MIN + (BR_CM_MAX - BR_CM_MIN) * Math.pow(t, BR_CURVE);
+}
+
+/* That radius expressed in THIS model's texture pixels, before the per-hit
+   density correction. Clamped at the bottom to ~0.75 texel: the male atlas
+   resolves only ~4 mm per texel, so finer settings cannot be represented there
+   and would otherwise vanish into a sub-pixel dab. */
+function nominalBrFor(part){
+  if(!part || !(part.refDensity > 0) || !(part.modelScale > 0)) return 4;
+  const targetWorld = brushRadiusCm() / CM_PER_UNIT;
+  const texels = targetWorld * part.refDensity * TEX_SIZE / part.modelScale;
+  return Math.min(Math.max(texels, 0.75), TEX_SIZE * 0.28);
 }
 
 /* Radius in texture pixels for THIS hit: the slider radius scaled by how
@@ -2497,7 +2681,7 @@ function brushRadiusAt(mesh, hit){
     const d = triDensity(g.attributes.position, g.attributes.uv, f.a, f.b, f.c);
     if(d > 0) ratio = Math.min(DENS_MAX, Math.max(DENS_MIN, d / part.refDensity));
   }
-  return Math.min(nominalBr() * ratio, TEX_SIZE * 0.28);
+  return Math.min(nominalBrFor(part) * ratio, TEX_SIZE * 0.28);
 }
 
 const paintLog = [];
@@ -2521,7 +2705,7 @@ function paintCircle(ctx, cx, cy, br, r, g, b, depth){
      alpha is applied later, once, in rebuildDisplay()/bakeStroke(), which makes
      intensity a hard ceiling — re-tracing a spot can no longer push it beyond
      the set intensity. Depth is conveyed by the hatch/stipple overlay
-     (buildHatchOverlay), not by fill opacity, so a flat fill loses no depth
+     (buildDepthPattern/applyPattern), not by fill opacity, so a flat fill loses no depth
      information. The arc clip anti-aliases the edge. `depth` is kept in the
      signature for callers/compat. */
   ctx.save();
@@ -2536,72 +2720,93 @@ const hatchOff    = document.createElement('canvas');
 hatchOff.width    = hatchOff.height = TEX_SIZE;
 const hatchOffCtx = hatchOff.getContext('2d');
 
-/* Draw a tiled pattern onto hatchOff, then clip it to wherever shapeSrc has paint.
-   Result: hatchOff contains pattern lines/dots ONLY inside painted areas. */
-function buildHatchOverlay(shapeSrc, depth, br){
-  /* Pattern spacing scales with brush so it's always visible even in small strokes.
-     At minimum: ~5 lines or ~3 dots fit across any brush diameter. */
-  const S   = TEX_SIZE;
-  const gap = Math.max(3, br / 5);          /* line spacing: 5 gaps per brush width  */
-  const dotStep = Math.max(5, br / 4);      /* dot grid: 4 columns per brush width   */
-  const dotR    = Math.max(1.2, br / 14);   /* dot radius scales too                 */
-  hatchOffCtx.clearRect(0, 0, S, S);
+/* ── Depth pattern: a cached, natively-tiled CanvasPattern ───────────────────
+   The pattern depends ONLY on (depth, brush radius) — and strokeBr is locked
+   for the whole stroke (see paintAt) — so it is identical for every dab of a
+   stroke. It used to be redrawn from scratch on every pointermove as 1024
+   (sub) or 2048 (muscular) full-width line strokes, or ~10 600 arc+fills
+   (visceral): 1.5–3.1 MILLION pixels of line rasterisation per move event,
+   thrown away and recomputed identically microseconds later. That was the
+   single largest cost in the app and the main reason painting crawled on a
+   phone.
 
-  if(depth === 'sub'){
-    hatchOffCtx.strokeStyle = 'rgba(0,0,0,0.55)';
-    hatchOffCtx.lineWidth   = Math.max(1, br / 28);
-    hatchOffCtx.save();
-    hatchOffCtx.translate(S * 0.5, S * 0.5);
-    hatchOffCtx.rotate(Math.PI / 4);
-    for(let h = -S * 1.5; h <= S * 1.5; h += gap){
-      hatchOffCtx.beginPath();
-      hatchOffCtx.moveTo(-S * 1.5, h);
-      hatchOffCtx.lineTo( S * 1.5, h);
-      hatchOffCtx.stroke();
-    }
-    hatchOffCtx.restore();
+   Now the motif is rendered ONCE into a small seamless tile and handed to
+   createPattern(), which the browser tiles in native code. Per dab the work
+   is: fillRect the pattern + one destination-in mask + one blit — four
+   full-canvas ops with no per-line JS at all.
 
-  } else if(depth === 'muscular'){
-    hatchOffCtx.strokeStyle = 'rgba(0,0,0,0.60)';
-    hatchOffCtx.lineWidth   = Math.max(1, br / 32);
-    hatchOffCtx.save();
-    hatchOffCtx.translate(S * 0.5, S * 0.5);
-    hatchOffCtx.rotate(Math.PI / 4);
-    for(let h = -S * 1.5; h <= S * 1.5; h += gap){
-      hatchOffCtx.beginPath();
-      hatchOffCtx.moveTo(-S * 1.5, h);
-      hatchOffCtx.lineTo( S * 1.5, h);
-      hatchOffCtx.stroke();
-    }
-    hatchOffCtx.rotate(-Math.PI / 2);
-    for(let h = -S * 1.5; h <= S * 1.5; h += gap){
-      hatchOffCtx.beginPath();
-      hatchOffCtx.moveTo(-S * 1.5, h);
-      hatchOffCtx.lineTo( S * 1.5, h);
-      hatchOffCtx.stroke();
-    }
-    hatchOffCtx.restore();
+   Seamlessness is the only subtlety. A 45° line pattern is NOT seamless in an
+   axis-aligned tile of arbitrary size, so the diagonals are not drawn rotated;
+   the tile is a square of side `gap*√2` containing the two wrap-around
+   segments of a diagonal band, which tiles exactly. Visually identical to the
+   old rotated full-canvas hatch, at ~1/400th the cost. */
+let patCache = { key:null, pattern:null };
+
+function buildDepthPattern(depth, br){
+  const key = depth + '|' + br.toFixed(2);
+  if(patCache.key === key) return patCache.pattern;
+
+  const gap     = Math.max(3, br / 5);        /* line spacing: 5 gaps per brush width */
+  const dotStep = Math.max(5, br / 4);        /* dot grid: 4 columns per brush width  */
+  const dotR    = Math.max(1.2, br / 14);     /* dot radius scales too                */
+
+  const tile = document.createElement('canvas');
+  const tc   = tile.getContext('2d');
+  let pattern = null;
+
+  if(depth === 'sub' || depth === 'muscular'){
+    /* Side = gap*√2 so a 45° band repeats exactly at the tile edges. Each
+       diagonal is drawn three times (centre + both wraps) and clipped by the
+       tile bounds, which is what makes the seam invisible. */
+    const T = Math.max(2, Math.round(gap * Math.SQRT2));
+    tile.width = tile.height = T;
+    tc.strokeStyle = depth === 'sub' ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.60)';
+    tc.lineWidth   = Math.max(1, br / (depth === 'sub' ? 28 : 32));
+    const diag = (sx, sy, ex, ey) => {
+      for(const o of [-T, 0, T]){
+        tc.beginPath(); tc.moveTo(sx + o, sy); tc.lineTo(ex + o, ey); tc.stroke();
+      }
+    };
+    diag(0, 0, T, T);                       /* "/" direction                        */
+    if(depth === 'muscular') diag(T, 0, 0, T); /* cross-hatch: add the "\" direction */
+    pattern = tc.createPattern(tile, 'repeat');
 
   } else if(depth === 'visceral'){
-    hatchOffCtx.fillStyle = 'rgba(0,0,0,0.45)';
-    for(let row = 0; row * dotStep < S + dotStep; row++){
-      const xOff = (row % 2) * (dotStep * 0.5);
-      for(let col = 0; col * dotStep < S + dotStep; col++){
-        hatchOffCtx.beginPath();
-        hatchOffCtx.arc(col * dotStep + xOff, row * dotStep, dotR, 0, Math.PI * 2);
-        hatchOffCtx.fill();
+    /* Staggered dot grid: a 2-row tile reproduces the half-step offset. */
+    const T = Math.max(2, Math.round(dotStep));
+    tile.width = T; tile.height = T * 2;
+    tc.fillStyle = 'rgba(0,0,0,0.45)';
+    const dot = (x, y) => {
+      /* draw wraps so dots straddling an edge are not clipped off */
+      for(const ox of [-T, 0, T]) for(const oy of [-T*2, 0, T*2]){
+        tc.beginPath(); tc.arc(x + ox, y + oy, dotR, 0, Math.PI * 2); tc.fill();
       }
-    }
+    };
+    dot(0, 0);
+    dot(T * 0.5, T);
+    pattern = tc.createPattern(tile, 'repeat');
   }
 
+  patCache = { key, pattern };
+  return pattern;
+}
+
+/* Fill hatchOff with the tiled motif, then clip it to wherever shapeSrc has
+   paint — hatchOff ends up holding pattern lines/dots ONLY inside the stroke. */
+function applyPattern(targetCtx, shapeSrc, depth, alpha, br){
+  if(depth === 'skin' || depth === 'eraser') return;
+  const pattern = buildDepthPattern(depth, br);
+  if(!pattern) return;
+
+  const S = TEX_SIZE;
+  hatchOffCtx.globalCompositeOperation = 'source-over';
+  hatchOffCtx.clearRect(0, 0, S, S);
+  hatchOffCtx.fillStyle = pattern;
+  hatchOffCtx.fillRect(0, 0, S, S);
   hatchOffCtx.globalCompositeOperation = 'destination-in';
   hatchOffCtx.drawImage(shapeSrc, 0, 0);
   hatchOffCtx.globalCompositeOperation = 'source-over';
-}
 
-function applyPattern(targetCtx, shapeSrc, depth, alpha, br){
-  if(depth === 'skin' || depth === 'eraser') return;
-  buildHatchOverlay(shapeSrc, depth, br);
   targetCtx.save();
   targetCtx.globalAlpha = alpha;
   targetCtx.drawImage(hatchOff, 0, 0);
@@ -2628,7 +2833,7 @@ function stampStroke(targetCtx, cvS, ia){
   applyPattern(targetCtx, cvS, strokeDepth, ia, strokeBr);
 }
 
-function rebuildDisplay(mesh){
+function rebuildDisplayNow(mesh){
   const {cv, cvS, cvD, ctxD, tex, _strokeActive} = mesh.userData;
   ctxD.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
   ctxD.drawImage(cv, 0, 0);
@@ -2637,14 +2842,46 @@ function rebuildDisplay(mesh){
   invalidate();          /* paint changed the texture → redraw the body */
 }
 
+/* ── Display rebuild coalescing ──────────────────────────────────────────────
+   rebuildDisplayNow() costs ~5 full-canvas 512² operations PLUS a complete
+   512×512 RGBA upload to the GPU (1 MB). It used to run once per dab, i.e.
+   once per pointermove — 60–120 times a second, so 60–120 MB/s of texture
+   traffic for a result the user can only ever see once per displayed frame.
+
+   Dabs now mark their mesh dirty and the rebuild happens once per animation
+   frame, which is the only moment it can actually become visible. Identical
+   output, ~10x fewer uploads. Anything that must be pixel-correct immediately
+   (commit, undo restore, session load, gender swap) calls flushDisplay() or
+   rebuildDisplayNow() directly instead. */
+const dirtyMeshes     = new Set();
+let   displayScheduled = false;
+
+function flushDisplay(){
+  displayScheduled = false;
+  if(!dirtyMeshes.size) return;
+  for(const mesh of dirtyMeshes) rebuildDisplayNow(mesh);
+  dirtyMeshes.clear();
+}
+
+function rebuildDisplay(mesh){
+  dirtyMeshes.add(mesh);
+  if(displayScheduled) return;
+  displayScheduled = true;
+  requestAnimationFrame(flushDisplay);
+}
+
 function bakeStroke(){
+  /* Drop any queued preview rebuilds first: the commit below supersedes them,
+     and letting a stale queued rebuild land after the bake would re-stamp an
+     already-cleared stroke layer. */
+  dirtyMeshes.clear();
   for(const mesh of bodyParts){
     if(!mesh.userData._strokeActive) continue;
     const {ctx, cvS, ctxS} = mesh.userData;
     stampStroke(ctx, cvS, intensity / 10);   /* replace-commit into the base (see stampStroke) */
     ctxS.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
     mesh.userData._strokeActive = false;
-    rebuildDisplay(mesh);
+    rebuildDisplayNow(mesh);
   }
 }
 
@@ -2652,11 +2889,29 @@ function bakeStroke(){
    One step = one stroke (pointerdown → pointerup), an eraser drag included.
    We snapshot a mesh's COMMITTED base canvas the first time a stroke touches it
    — lazily, so a stroke that stays on one part costs one 512² copy rather than
-   one per part. paintLog holds one entry per DAB, not per stroke, so a step also
-   records the log length at stroke start and undo truncates back to it. */
+   one per part.
+
+   paintLog holds one entry per DAB, not per stroke, so a step must also record
+   where in the log the stroke began. That marker used to be the log's absolute
+   LENGTH — which silently broke as soon as the log's front was trimmed (see the
+   cap in paintAt): every stored length then pointed 800 entries too far, so
+   undo restored the canvas correctly but left stale strokes in the log, and the
+   tooltip went on reporting pain that was no longer painted. The marker is now
+   a monotonically increasing per-dab SEQUENCE NUMBER, which trimming the front
+   cannot invalidate. */
 const UNDO_LIMIT = 15;                    /* ≈1 MB per snapshot at 512² */
 let undoStack = [], redoStack = [];
-let strokeSnaps = null, strokeLogLen = 0;
+let strokeSnaps = null, strokeSeq = 0;
+let dabSeq = 0;                           /* never reset except with the log itself */
+
+/* Index of the first log entry stamped after `seq` (log is seq-ordered), or -1. */
+function logIndexAfter(seq){ return paintLog.findIndex(s => s.seq > seq); }
+
+/* Drop every dab stamped after `seq`; returns what was removed, for redo. */
+function truncateLogAfter(seq){
+  const i = logIndexAfter(seq);
+  return i === -1 ? [] : paintLog.splice(i);
+}
 
 function copyCanvas(src){
   const c = document.createElement('canvas');
@@ -2669,17 +2924,18 @@ function copyCanvas(src){
 function snapsOf(meshes){ return meshes.map(m => ({ mesh:m, cv:copyCanvas(m.userData.cv) })); }
 
 function restoreSnaps(snaps){
+  dirtyMeshes.clear();   /* a queued preview rebuild must not land after a restore */
   for(const {mesh, cv} of snaps){
     const {ctx, ctxS} = mesh.userData;
     ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
     ctx.drawImage(cv, 0, 0);
     ctxS.clearRect(0, 0, TEX_SIZE, TEX_SIZE);   /* drop any uncommitted stroke too */
     mesh.userData._strokeActive = false;
-    rebuildDisplay(mesh);                       /* → invalidate() */
+    rebuildDisplayNow(mesh);                    /* → invalidate() */
   }
 }
 
-function beginUndoStroke(){ strokeSnaps = new Map(); strokeLogLen = paintLog.length; }
+function beginUndoStroke(){ strokeSnaps = new Map(); strokeSeq = dabSeq; }
 
 function snapshotForUndo(mesh){
   if(!strokeSnaps || strokeSnaps.has(mesh)) return;
@@ -2690,11 +2946,34 @@ function snapshotForUndo(mesh){
 function endUndoStroke(){
   if(!strokeSnaps) return;
   if(strokeSnaps.size){
-    undoStack.push({ snaps:[...strokeSnaps].map(([mesh, cv]) => ({mesh, cv})), logLen:strokeLogLen });
+    undoStack.push({ snaps:[...strokeSnaps].map(([mesh, cv]) => ({mesh, cv})), seq:strokeSeq });
     if(undoStack.length > UNDO_LIMIT) undoStack.shift();
     redoStack = [];
   }
   strokeSnaps = null;
+  refreshUndoButtons();
+}
+
+/* Discard the in-flight stroke outright, as if it had never been started.
+   Used when a gesture turns out not to be a paint stroke after all (a second
+   finger landing → the user is navigating, not painting). This is a pixel-exact
+   rollback, not a cosmetic cover-up: it reinstates the committed base canvas
+   captured at stroke start and truncates the dab log to the same instant, so no
+   trace of the aborted stroke survives in the texture OR in the data. Safe to
+   call when nothing is in flight. */
+function abortStroke(){
+  if(!strokeSnaps){ isPainting = false; return; }
+  const snaps = [...strokeSnaps].map(([mesh, cv]) => ({mesh, cv}));
+  truncateLogAfter(strokeSeq);
+  if(snaps.length) restoreSnaps(snaps);
+  else for(const m of bodyParts){        /* nothing committed yet — just drop the layer */
+    m.userData.ctxS.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+    m.userData._strokeActive = false;
+  }
+  strokeSnaps = null;
+  isPainting  = false;
+  strokeBrSet = false;
+  invalidate();
   refreshUndoButtons();
 }
 
@@ -2704,8 +2983,8 @@ function undo(){
   /* capture the post-stroke state BEFORE restoring, so redo can return to it */
   redoStack.push({
     snaps:   snapsOf(step.snaps.map(s => s.mesh)),
-    logLen:  step.logLen,
-    removed: paintLog.splice(step.logLen),
+    seq:     step.seq,
+    removed: truncateLogAfter(step.seq),
   });
   restoreSnaps(step.snaps);
   refreshUndoButtons();
@@ -2714,9 +2993,9 @@ function undo(){
 function redo(){
   const step = redoStack.pop();
   if(!step) return;
-  undoStack.push({ snaps:snapsOf(step.snaps.map(s => s.mesh)), logLen:step.logLen });
+  undoStack.push({ snaps:snapsOf(step.snaps.map(s => s.mesh)), seq:step.seq });
   restoreSnaps(step.snaps);
-  paintLog.length = step.logLen;
+  truncateLogAfter(step.seq);
   paintLog.push(...step.removed);
   refreshUndoButtons();
 }
@@ -2768,13 +3047,29 @@ function paintAt(mesh, hit){
   part._strokeActive = true;
   rebuildDisplay(mesh);
 
+  /* Thin the RECORD, not the paint. A drag fires 60–120 pointermoves a second,
+     and consecutive dabs a fraction of a brush-width apart add nothing a reader
+     can use: paintInfoAt matches within 1.5x brushUV, so entries closer than
+     0.35x are pure redundancy. Skipping them cuts the log roughly 5–10x, which
+     keeps saved sessions small and puts the safety cap below out of practical
+     reach — it used to be hit after ~40 s of continuous painting, silently
+     discarding the earliest strokes of a consult. */
+  const last = paintLog.length ? paintLog[paintLog.length - 1] : null;
+  const brUV = br / TEX_SIZE;
+  if(last && last.partName === part.name && last.painId === activePain.id &&
+     last.depth === activeDepth && last.intensity === intensity &&
+     Math.hypot(last.uvx - uv.x, last.uvy - uv.y) < brUV * 0.35) return;
+
   paintLog.push({
+    seq: ++dabSeq,
     partName: part.name, uvx: uv.x, uvy: uv.y,
-    brushUV: br / TEX_SIZE,
+    brushUV: brUV,
     painId: activePain.id, label: activePain.label,
     color: activePain.color, depth: activeDepth, intensity,
   });
-  if(paintLog.length > 4000) paintLog.splice(0, 800);
+  /* Safety valve only. Trimming the front is now harmless to undo (steps are
+     keyed by dab sequence number, not by log index). */
+  if(paintLog.length > 20000) paintLog.splice(0, 4000);
 }
 
 /* ── Cursor ring ──────────────────────────────────────────────────── */
@@ -2784,12 +3079,12 @@ function paintAt(mesh, hit){
    old fixed texel approximation) also tracks zoom correctly. */
 function brushWorldRadius(part){
   if(!part || !(part.refDensity > 0)) return 0;
-  return (nominalBr() / (part.refDensity * TEX_SIZE)) * part.modelScale;
+  return (nominalBrFor(part) / (part.refDensity * TEX_SIZE)) * part.modelScale;
 }
 
 let lastRingR = 12;   /* held while the cursor is off the body, so it can't jump */
 function updateRing(screenX, screenY, hit){
-  const rect = cvEl.getBoundingClientRect();
+  const rect = cvRect;
   let screenR = lastRingR;
   if(hit && hit.object){
     const wr = brushWorldRadius(hit.object.userData);
@@ -2810,7 +3105,7 @@ function updateRing(screenX, screenY, hit){
 const raycaster = new THREE.Raycaster();
 
 function ndc(x,y){
-  const rect = cvEl.getBoundingClientRect();
+  const rect = cvRect;
   return new THREE.Vector2(((x-rect.left)/rect.width)*2-1, -((y-rect.top)/rect.height)*2+1);
 }
 function ndcFromEvent(e){ return ndc(e.clientX, e.clientY); }
@@ -2873,6 +3168,58 @@ function showTipAt(x,y){
    hide on controls' 'change', because finger-jitter damping fires it right
    after a tap and would kill the pin instantly. */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   GESTURE ARBITRATION — one finger paints, two fingers move the body
+   ══════════════════════════════════════════════════════════════════════════
+   Previously ANY pointer landing on the body with a type selected started a
+   stroke immediately and switched OrbitControls off for the whole gesture.
+   Two consequences, both only reachable by touch:
+
+   1. Pinch-to-zoom PAINTED. The first finger's pointerdown had already laid a
+      dab and opened an undo stroke before the second finger ever arrived, so
+      every zoom left a stray mark (and went on painting as the fingers moved).
+
+   2. The body could not be rotated at all. A mouse escapes via right-drag —
+      `e.button !== 0` returns before controls are disabled — but a touchscreen
+      has no right button, so reorienting the body meant deselecting the pain
+      type, rotating, and selecting it again. On a phone, where the body fills
+      the screen and there is almost no empty background to drag, that made the
+      posterior half of the body effectively unreachable while painting.
+
+   The fix is to decide what a gesture IS before committing to it:
+
+   - A stroke is ARMED on pointerdown but not started. It begins on the first
+     pointermove, or on pointerup for a stationary tap (which still paints a
+     single dab, as before). Both fingers of a pinch land within a few tens of
+     milliseconds, well before any move, so a pinch now never starts a stroke
+     in the first place.
+   - If a second pointer arrives anyway — a slow or clumsy pinch that did get a
+     move in first — abortStroke() rolls the texture back to the snapshot taken
+     at stroke start and truncates the dab log to the same instant. The stray
+     mark is removed, not covered up.
+   - Two-finger orbit/pan/zoom is handled by this app's own touch code (below),
+     NOT by OrbitControls, so it keeps working regardless of controls.enabled.
+     That is what makes the one-finger-paints rule safe to apply. */
+const activePointers = new Set();
+let armedStroke = null;    /* {pointerId} — a stroke decided on but not begun */
+
+/* Begin the stroke that was armed on pointerdown. Idempotent. */
+function startArmedStroke(){
+  if(!armedStroke || isPainting) return;
+  bakeStroke();               /* commit previous stroke at current intensity */
+  for(const m of bodyParts) m.userData.ctxS.clearRect(0,0,TEX_SIZE,TEX_SIZE);
+  strokeDepth = activeDepth;  /* lock depth for this stroke */
+  strokeBrSet = false;        /* first dab will lock the pattern scale       */
+  beginUndoStroke();          /* snapshots are taken lazily inside paintAt   */
+  controls.enabled = false;
+  isPainting = true;
+}
+
+function releaseGesture(){
+  armedStroke = null;
+  if(!activePointers.size) controls.enabled = true;
+}
+
 cvEl.addEventListener('pointerenter', ()=>{ ring.style.display='block'; });
 cvEl.addEventListener('pointerleave', ()=>{
   ring.style.display='none'; tip.style.display='none';
@@ -2880,24 +3227,33 @@ cvEl.addEventListener('pointerleave', ()=>{
      over as far as undo is concerned — its snapshot was taken at stroke start,
      so undoing still discards it correctly whenever the bake lands. */
   if(isPainting) endUndoStroke();
-  isPainting=false; controls.enabled=true;
+  isPainting=false; armedStroke=null; controls.enabled=true;
+  activePointers.clear();
 });
 
 cvEl.addEventListener('pointerdown', e=>{
   if(compareActive){ return; }
   if(e.button !== 0){ updateRing(e.clientX, e.clientY); return; }
+
+  activePointers.add(e.pointerId);
+
+  /* Second finger down → this is navigation, not painting. Undo anything the
+     first finger already committed and hand the gesture to the touch handlers. */
+  if(activePointers.size > 1){
+    abortStroke();
+    armedStroke = null;
+    tapInfo = null;
+    return;
+  }
+
   hidePinnedTip();               /* a fresh interaction clears the old pin */
   raycaster.setFromCamera(ndcFromEvent(e), camera);
   const hits = raycaster.intersectObjects(bodyParts, false);
   if(hits.length && !viewMode && (activePain || activeDepth === 'eraser')){
-    bakeStroke();               /* commit previous stroke at current intensity */
-    for(const m of bodyParts) m.userData.ctxS.clearRect(0,0,TEX_SIZE,TEX_SIZE);
-    strokeDepth = activeDepth;  /* lock depth for this stroke */
-    strokeBrSet = false;        /* first dab will lock the pattern scale       */
-    beginUndoStroke();          /* snapshots are taken lazily inside paintAt   */
-    controls.enabled=false; isPainting=true;
-    paintAt(hits[0].object, hits[0]);
-    tapInfo=null;
+    /* Arm, don't paint: a second finger may still be on its way down. */
+    armedStroke = { pointerId:e.pointerId };
+    controls.enabled = false;    /* so OrbitControls ignores this finger entirely */
+    tapInfo = null;
   } else {
     /* Not painting: this may be a tap to inspect (resolved on pointerup if the
        finger/mouse didn't travel — a drag is an orbit, not a tap). */
@@ -2907,12 +3263,20 @@ cvEl.addEventListener('pointerdown', e=>{
 });
 
 cvEl.addEventListener('pointermove', e=>{
+  /* While two or more pointers are down the touch handlers own the gesture;
+     doing raycasts and tooltip work for each of them is wasted effort. */
+  if(activePointers.size > 1) return;
+
   /* One raycast per move, hoisted: the ring needs the hit to size itself (it is
      a projected world radius now), and both branches below reuse it. */
   raycaster.setFromCamera(ndcFromEvent(e), camera);
   const hits = raycaster.intersectObjects(bodyParts, false);
   updateRing(e.clientX, e.clientY, hits[0]);
   if(tapInfo && !tapInfo.moved && Math.hypot(e.clientX-tapInfo.x, e.clientY-tapInfo.y) > 11) tapInfo.moved=true;
+
+  /* The armed stroke commits here — the gesture has proven to be a drag by one
+     pointer, so it cannot still turn out to be a pinch. */
+  if(armedStroke && armedStroke.pointerId === e.pointerId) startArmedStroke();
 
   if(isPainting){
     if(hits.length) paintAt(hits[0].object, hits[0]);
@@ -2933,11 +3297,36 @@ cvEl.addEventListener('pointermove', e=>{
   if(!pinnedTip) tip.style.display='none';
 });
 
-cvEl.addEventListener('pointerup', ()=>{
+function onPointerFinish(e){
+  activePointers.delete(e.pointerId);
+
+  /* A stationary tap on the body with a type selected: still paints one dab,
+     exactly as it did when pointerdown painted immediately. */
+  if(armedStroke && armedStroke.pointerId === e.pointerId && !isPainting){
+    raycaster.setFromCamera(ndc(e.clientX, e.clientY), camera);
+    const hits = raycaster.intersectObjects(bodyParts, false);
+    if(hits.length){
+      startArmedStroke();
+      paintAt(hits[0].object, hits[0]);
+    }
+  }
+
   if(isPainting){ bakeStroke(); endUndoStroke(); }   /* commit stroke at final intensity */
-  isPainting=false; controls.enabled=true;
+  isPainting = false;
+  releaseGesture();
   if(tapInfo && !tapInfo.moved) showTipAt(tapInfo.x, tapInfo.y);   /* tap = inspect */
-  tapInfo=null;
+  tapInfo = null;
+}
+cvEl.addEventListener('pointerup', onPointerFinish);
+/* pointercancel fires when the browser takes the gesture over (scroll
+   handoff, system gesture). Without it the pointer would stay in the set
+   forever and painting would be dead until the next pointerleave. */
+cvEl.addEventListener('pointercancel', e=>{
+  abortStroke();
+  armedStroke = null;   /* before onPointerFinish, so a cancelled gesture
+                           cannot fall through to the tap-paints-one-dab path */
+  tapInfo = null;
+  onPointerFinish(e);
 });
 
 /* ── Pain selection events ──────────────────────────────────── */
@@ -2973,10 +3362,14 @@ document.querySelectorAll('.dep').forEach(btn=>{
 /* ── Brush size ─────────────────────────────────────────────── */
 const brushSlider = document.getElementById('brush-sz');
 const brushVal    = document.getElementById('brush-val');
+/* Shown as the brush's DIAMETER in mm — a real measurement rather than an
+   arbitrary 1–30, and it needs no translating. */
+function refreshBrushVal(){ brushVal.textContent = Math.round(brushRadiusCm() * 20) + ' mm'; }
 brushSlider.addEventListener('input', ()=>{
   brushSize = parseInt(brushSlider.value, 10);
-  brushVal.textContent = brushSize;
+  refreshBrushVal();
 });
+refreshBrushVal();
 
 /* ── Intensity control (compact gauge → vertical-slider popover) ── */
 const intBtn      = document.getElementById('int-btn');
@@ -3173,6 +3566,7 @@ controls.addEventListener('change', invalidate);
     renderer.setSize(wA, hA, false);
     camera.aspect = wA/hA;
     camera.updateProjectionMatrix();
+    refreshCvRect();   /* the canvas just moved/resized → cached rect is stale */
     needsRender = true;
   }
   if(compareActive && compareSceneB){
@@ -3264,20 +3658,52 @@ const DB = {
   },
 };
 
+/* ── Patient-list cache ──────────────────────────────────────────────────────
+   Everything — opening the panel, listing sessions, filling the compare
+   dropdowns, saving, deleting — went through DB.load(), which deserialises the
+   ENTIRE patient list including every session's base64 texture payload. Just
+   printing a list of session labels was pulling megabytes of image data off
+   disk and through JSON.parse, every time.
+
+   The list is now read once and held. Single-device, no-sync storage (that is
+   the app's documented data model) means nothing else can write behind our
+   back, so the cache cannot go stale. Writers update it in place on success.
+
+   This is a stopgap for the real fix, which is to stop storing textures at all
+   and replay the stroke log instead — at which point sessions become small
+   enough that the whole question disappears. */
+let _ptCache = null;
+async function loadPatients(){
+  if(_ptCache) return _ptCache;
+  _ptCache = await DB.load();
+  return _ptCache;
+}
+
 /* Saves and shows a clear warning instead of failing silently when storage is full. */
 async function persistPatients(pts){
   try{
     await DB.save(pts);
+    _ptCache = pts;
     return true;
   }catch(e){
     console.error('[PV] Save failed',e);
+    _ptCache = null;          /* unknown on-disk state → re-read next time */
     alert(window.I18N[window.currentLanguage].storageFullError.replace('{error}', e&&e.message?e.message:e));
     return false;
   }
 }
 function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
-function safeEsc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+/* Escapes for BOTH text and attribute contexts. The previous implementation
+   round-tripped through textContent → innerHTML, which escapes & < > but NOT
+   quotes — and it was used inside title="…", so a session label containing a
+   double quote broke out of the attribute and could inject an event handler.
+   Reachable via an imported backup file, i.e. not only self-inflicted. */
+function safeEsc(s){
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 /* Roll the per-stroke paint log up into one row per pain type — colour, the
    intensity range it was painted at, and the depths used — so a saved session
@@ -3301,7 +3727,11 @@ function summarizePaint(log=paintLog){
    [partName, uvx, uvy, brushUV, painId, colour, depth, intensity]. */
 const r4=n=>Math.round(n*1e4)/1e4;
 function packStrokes(){ return paintLog.map(s=>[s.partName,r4(s.uvx),r4(s.uvy),r4(s.brushUV),s.painId,s.color,s.depth,s.intensity]); }
-function unpackStrokes(arr){ return (arr||[]).map(a=>({partName:a[0],uvx:a[1],uvy:a[2],brushUV:a[3],painId:a[4],label:a[4],color:a[5],depth:a[6],intensity:a[7]})); }
+/* `seq` is runtime-only state (undo bookkeeping — see truncateLogAfter), not part
+   of the saved format, so restored dabs are stamped from the live counter. It
+   stays monotonic across loads, and resetUndo() clears any step that referred to
+   the sequence numbers being replaced. */
+function unpackStrokes(arr){ return (arr||[]).map(a=>({seq:++dabSeq,partName:a[0],uvx:a[1],uvy:a[2],brushUV:a[3],painId:a[4],label:a[4],color:a[5],depth:a[6],intensity:a[7]})); }
 
 function captureSession(label){
   const tex={};
@@ -3444,7 +3874,7 @@ function addSceneLights(s){
 
 async function buildCompareScene(sess){
   compareSceneB=new THREE.Scene();
-  compareSceneB.fog=new THREE.FogExp2(0xededea,0.009);
+  compareSceneB.fog=new THREE.FogExp2(0xf0f0ec,0.009);
   addSceneLights(compareSceneB);
   const modelClone=modelData[sess.gender].scene.clone(true);
   modelClone.visible=true;
@@ -3597,7 +4027,7 @@ function showDetailView(){
 }
 
 async function renderPatientList(){
-  const pts=await DB.load(), el=document.getElementById('pp-list');
+  const pts=await loadPatients(), el=document.getElementById('pp-list');
   el.innerHTML='';
   pts.forEach(pt=>{
     const row=document.createElement('div');
@@ -3616,7 +4046,7 @@ async function selectPatient(id){
 }
 
 async function renderDetailView(){
-  const pts=await DB.load(), pt=pts.find(p=>p.id===selectedPatientId);
+  const pts=await loadPatients(), pt=pts.find(p=>p.id===selectedPatientId);
   if(!pt) return;
   document.getElementById('pp-sel-name').textContent=pt.name;
   const listEl=document.getElementById('pp-sess-list');
@@ -3625,7 +4055,7 @@ async function renderDetailView(){
     const row=document.createElement('div');
     row.className='pp-sess-row';
     row.innerHTML=
-      `<span class="pp-sess-date">${sess.date}</span>`+
+      `<span class="pp-sess-date">${safeEsc(sess.date)}</span>`+
       `<span class="pp-sess-lbl" title="${safeEsc(sess.label)}">${safeEsc(sess.label)}</span>`+
       `<button class="pp-sess-see">${window.I18N[window.currentLanguage].sessSee}</button>`+
       `<button class="pp-sess-load">${window.I18N[window.currentLanguage].load}</button>`+
@@ -3652,14 +4082,14 @@ window.refreshPatientPanelLanguage = function(){
 
 async function createPatient(name){
   name=name.trim(); if(!name) return;
-  const pts=await DB.load();
+  const pts=await loadPatients();
   pts.push({id:genId(),name,sessions:[]});
   if(await persistPatients(pts)) renderPatientList();
 }
 
 async function deletePatient(id){
   if(!confirm(window.I18N[window.currentLanguage].confirmDeletePatient)) return;
-  const pts=(await DB.load()).filter(p=>p.id!==id);
+  const pts=(await loadPatients()).filter(p=>p.id!==id);
   if(!(await persistPatients(pts))) return;
   if(selectedPatientId===id){ selectedPatientId=null; showListView(); }
   renderPatientList();
@@ -3668,7 +4098,7 @@ async function deletePatient(id){
 async function saveSession(){
   if(!selectedPatientId) return;
   const label=document.getElementById('pp-sess-label').value.trim()||todayStr();
-  const pts=await DB.load(), pt=pts.find(p=>p.id===selectedPatientId);
+  const pts=await loadPatients(), pt=pts.find(p=>p.id===selectedPatientId);
   if(!pt) return;
   (pt.sessions=pt.sessions||[]).push(captureSession(label));
   if(!(await persistPatients(pts))) return;
@@ -3677,7 +4107,7 @@ async function saveSession(){
 }
 
 async function deleteSession(patientId,sessId){
-  const pts=await DB.load(), pt=pts.find(p=>p.id===patientId);
+  const pts=await loadPatients(), pt=pts.find(p=>p.id===patientId);
   if(!pt) return;
   pt.sessions=(pt.sessions||[]).filter(s=>s.id!==sessId);
   if(await persistPatients(pts)) renderDetailView();
@@ -3717,7 +4147,7 @@ document.getElementById('pp-save-sess').addEventListener('click',saveSession);
 document.getElementById('pp-sess-label').addEventListener('keydown',e=>{ if(e.key==='Enter') saveSession(); });
 document.getElementById('pp-cmp-go').addEventListener('click',async()=>{
   if(!selectedPatientId) return;
-  const pt=(await DB.load()).find(p=>p.id===selectedPatientId); if(!pt) return;
+  const pt=(await loadPatients()).find(p=>p.id===selectedPatientId); if(!pt) return;
   const sidA=document.getElementById('cmp-sel-a').value;
   const sidB=document.getElementById('cmp-sel-b').value;
   if(!sidA||!sidB||sidA===sidB){ alert(window.I18N[window.currentLanguage].selectTwoSessions); return; }
@@ -3735,7 +4165,7 @@ document.getElementById('pp-cmp-go').addEventListener('click',async()=>{
 document.getElementById('cmp-exit').addEventListener('click',exitCompareMode);
 
 document.getElementById('pp-export').addEventListener('click',async()=>{
-  const pts=await DB.load();
+  const pts=await loadPatients();
   const blob=new Blob([JSON.stringify(pts,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
