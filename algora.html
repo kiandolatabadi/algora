@@ -30,7 +30,7 @@
       --bg:#f0f0ec;
       --surface:#ffffff;
       --border:#dcdce8;
-      --dim:#8888aa;
+      --dim:#6a6a8c;        /* 4.53:1 on --bg — WCAG AA for small text */
       --text:#1a1a30;
       --subtext:#55558a;
       --map-accent:#666;
@@ -76,6 +76,16 @@
       --accent-amber:#e0973f;
       --danger:#ff6b6b;
       --card-border-hover:#4a4a68;
+    }
+
+    /* Visible keyboard focus everywhere. Only the intensity track used to carry
+       a focus style, so tabbing through the pain cards, depth modes and patient
+       controls gave either a browser default or nothing at all. :focus-visible
+       (not :focus) means pointer users never see it. */
+    :focus-visible {
+      outline:2px solid var(--accent-blue);
+      outline-offset:2px;
+      border-radius:4px;
     }
 
     html, body { height:100%; overflow:hidden; font-size:16px; }
@@ -635,6 +645,25 @@
                     background:var(--hover); border-radius:9px;
                     border:1px solid var(--divider); }
     #pp-data-note.hidden { display:none; }
+
+    /* Credits disclosure in the settings panel (CC-BY attribution, in-app). */
+    .st-credits-btn {
+      background:none; border:none; cursor:pointer; padding:0;
+      font:inherit; font-size:0.66rem; font-weight:700; letter-spacing:0.1em;
+      text-transform:uppercase; color:var(--dim); text-align:left;
+    }
+    .st-credits-btn:hover { color:var(--text); }
+    .st-credits-btn::after { content:' \25BE'; }
+    .st-credits-btn[aria-expanded="true"]::after { content:' \25B4'; }
+    #credits-note {
+      margin-top:0.5rem; padding:0.5rem 0.6rem;
+      font-size:0.64rem; line-height:1.55; color:var(--subtext);
+      background:var(--hover); border-radius:9px; border:1px solid var(--divider);
+    }
+    #credits-note.hidden { display:none; }
+    #credits-note p + p, #credits-note ul { margin-top:0.35rem; }
+    #credits-note ul { padding-left:1rem; }
+    #credits-note li { margin-bottom:0.15rem; }
     .pp-back { background:none; border:none; cursor:pointer; font-size:0.9rem;
                color:var(--dim); padding:0 0.15rem; line-height:1; border-radius:50%;
                width:20px; height:20px; display:flex; align-items:center; justify-content:center; }
@@ -1053,6 +1082,23 @@
           <div class="st-toggle" id="lang-toggle">
             <button class="st-opt on" data-lang-choice="en">English</button>
             <button class="st-opt" data-lang-choice="fr">Français</button>
+          </div>
+        </div>
+
+        <!-- Credits. The two body models are CC-BY-4.0, which requires
+             attribution on the DISTRIBUTED WORK — a markdown file in the
+             source repository is not reachable by someone using the deployed
+             app, so the notice has to live in the app itself. -->
+        <div class="st-section">
+          <button class="st-credits-btn" id="credits-btn" aria-expanded="false" data-i18n="settingsCredits">Credits &amp; licences</button>
+          <div id="credits-note" class="hidden">
+            <p><strong>Algora</strong> © 2026 Kian Dolatabadi.</p>
+            <p data-i18n="creditsModels">3D body models used under CC-BY-4.0:</p>
+            <ul>
+              <li>&ldquo;Male Body&rdquo; — Alexander Antipov (Dessen)</li>
+              <li>&ldquo;Low poly female body | Teeth + tongue lp&rdquo; — mezuna</li>
+            </ul>
+            <p data-i18n="creditsThree">3D rendering by Three.js (MIT).</p>
           </div>
         </div>
       </div>
@@ -1666,6 +1712,11 @@ window.I18N = {
     selectTwoSessions: 'Select two different sessions.',
     cmpVs: 'vs', cmpExit: 'Exit compare',
     settingsTitle: 'Settings', settingsTheme: 'Theme', settingsLight: 'Light', settingsDark: 'Dark', settingsLanguage: 'Language',
+    settingsCredits: 'Credits & licences',
+    creditsModels: '3D body models used under CC-BY-4.0:',
+    creditsThree: '3D rendering by Three.js (MIT).',
+    /* Provenance canary — never rendered. See the note in applyTranslations. */
+    _origin: 'algora/kian-dolatabadi/2026/язык-боли/7f3c1e',
     settingsPainColor: 'Pain colour', painColorDistinct: 'Distinct', painColorCustom: 'My colour', painColorHint: 'My pain is this colour — every type takes it',
     legendEmpty: 'No pain recorded',
     cardSelect: 'Select', cardActive: '● Active',
@@ -1706,6 +1757,10 @@ window.I18N = {
     selectTwoSessions: 'Sélectionnez deux séances différentes.',
     cmpVs: 'vs', cmpExit: 'Quitter la comparaison',
     settingsTitle: 'Paramètres', settingsTheme: 'Thème', settingsLight: 'Clair', settingsDark: 'Sombre', settingsLanguage: 'Langue',
+    settingsCredits: 'Crédits et licences',
+    creditsModels: 'Modèles 3D du corps utilisés sous licence CC-BY-4.0 :',
+    creditsThree: 'Rendu 3D par Three.js (MIT).',
+    _origin: 'algora/kian-dolatabadi/2026/язык-боли/7f3c1e',
     settingsPainColor: 'Couleur de la douleur', painColorDistinct: 'Distinctes', painColorCustom: 'Ma couleur', painColorHint: 'Ma douleur est de cette couleur — tous les types la prennent',
     legendEmpty: 'Aucune douleur enregistrée',
     cardSelect: 'Sélectionner', cardActive: '● Actif',
@@ -1725,6 +1780,11 @@ window.I18N = {
   },
 };
 
+/* Note on `_origin` in both dictionaries above: a provenance canary. It is
+   never rendered — no element carries data-i18n="_origin" — and exists so that
+   an unattributed copy of this source can be identified by a plain text search
+   for the string. Evidence of origin, not a protection mechanism: client-side
+   code is readable by definition. Leave it in place; do not "clean it up". */
 window.applyTranslations = function applyTranslations(){
   const dict = window.I18N[window.currentLanguage];
   document.documentElement.lang = window.currentLanguage;
@@ -2080,13 +2140,13 @@ const MAX_DPR = COARSE_POINTER ? 1.5 : 2;
 
 const renderer = new THREE.WebGLRenderer({ canvas:cvEl, antialias:false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, MAX_DPR));
-renderer.setClearColor(0xededea, 1);
+renderer.setClearColor(0xf0f0ec, 1);   /* === --bg, so no seam at the panel edges */
 
 /* Compare mode's second view: its own renderer on its own canvas, not a
    scissored region of the main one — see buildCompareScene/enterCompareMode. */
 const rendererB = new THREE.WebGLRenderer({ canvas:cvElB, antialias:false });
 rendererB.setPixelRatio(Math.min(devicePixelRatio, MAX_DPR));
-rendererB.setClearColor(0xededea, 1);
+rendererB.setClearColor(0xf0f0ec, 1);
 
 /* Reads each canvas's OWN laid-out size (not its parent's) — #map-panel
    is a flex row when compare mode is active, so the two canvases split
@@ -2132,7 +2192,7 @@ new ResizeObserver(resizeB).observe(cvElB);
 
 /* ── Scene ──────────────────────────────────────────────────── */
 const scene = new THREE.Scene();
-scene.fog   = new THREE.FogExp2(0xededea, 0.009);
+scene.fog   = new THREE.FogExp2(0xf0f0ec, 0.009);
 
 const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 120);
 camera.position.set(0, 8, 28);
@@ -2483,6 +2543,14 @@ settingsBtn.addEventListener('click', ()=>
 );
 document.getElementById('settings-close').addEventListener('click', closeSettingsPanel);
 
+/* Credits disclosure (in-app CC-BY attribution — see the markup). */
+const creditsBtn = document.getElementById('credits-btn');
+creditsBtn?.addEventListener('click', ()=>{
+  const open = creditsBtn.getAttribute('aria-expanded') === 'true';
+  creditsBtn.setAttribute('aria-expanded', String(!open));
+  document.getElementById('credits-note')?.classList.toggle('hidden', open);
+});
+
 /* Keeps the gear button flush against the gender toggle's left edge in
    every layout (desktop centered pill, phone right-aligned pill) without
    needing separate positioning rules per breakpoint. */
@@ -2511,7 +2579,7 @@ function applyTheme(theme){
   /* The body-map canvas is cleared by the WebGL renderer, not CSS, so the
      backdrop behind the 3D model has to be repainted here too — otherwise
      dark mode leaves a big light-grey rectangle behind everything. */
-  const clear = theme==='dark' ? 0x101018 : 0xededea;
+  const clear = theme==='dark' ? 0x0f0f16 : 0xf0f0ec;   /* === --bg in both themes */
   renderer?.setClearColor(clear, 1);
   rendererB?.setClearColor(clear, 1);
 }
@@ -3806,7 +3874,7 @@ function addSceneLights(s){
 
 async function buildCompareScene(sess){
   compareSceneB=new THREE.Scene();
-  compareSceneB.fog=new THREE.FogExp2(0xededea,0.009);
+  compareSceneB.fog=new THREE.FogExp2(0xf0f0ec,0.009);
   addSceneLights(compareSceneB);
   const modelClone=modelData[sess.gender].scene.clone(true);
   modelClone.visible=true;
